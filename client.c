@@ -18,7 +18,7 @@ int main(void) {
 
     sa.sin_family = AF_INET;
     sa.sin_port = htons(80);
-    sa.sin_addr.s_addr = inet_addr("216.58.214.206");
+    sa.sin_addr.s_addr = inet_addr("216.58.214.206"); //google.com ip
     fd_skt = socket(AF_INET, SOCK_STREAM, 0);
     connect(fd_skt, (struct sockaddr*)&sa, sizeof(sa));
     write(fd_skt, REQUEST, sizeof(buf));

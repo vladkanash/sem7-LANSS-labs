@@ -6,8 +6,8 @@
    The port number is passed as an argument
 
    Usage:
-        After run this, 'nc 127.0.0.1 [port_number]'
-        and send ur message*/
+        Start this, then do 'nc 127.0.0.1 [port_number]'
+        and send ur messages*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +15,14 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <time.h>
+
+#define COMMAND_ECHO "ECHO\n"
+#define COMMAND_TIME "TIME\n"
+#define COMMAND_CLOSE "CLOSE\n"
+
+void process_command(const char *buf, char *out);
+void get_current_time(char *out);
 
 void error(const char *msg)
 {
@@ -24,11 +32,24 @@ void error(const char *msg)
 
 int main(int argc, char *argv[])
 {
-    int sockfd, newsockfd, portno;
+
+    time_t timer;
+    char buffer[26];
+    struct tm* tm_info;
+
+    time(&timer);
+    tm_info = localtime(&timer);
+
+    strftime(buffer, 26, "%Y:%m:%d %H:%M:%S", tm_info);
+    puts(buffer);
+
+    int sockfd, portno, msgsock, rval;
     socklen_t clilen;
-    char buffer[256];
+    char buf[256];
+    char out[256];
+    memset(buf, 0, sizeof(buf));
+    memset(out, 0, sizeof(out));
     struct sockaddr_in serv_addr, cli_addr;
-    int n;
 
     if (argc < 2) {
         fprintf(stderr,"ERROR, no port provided\n");
@@ -53,26 +74,46 @@ int main(int argc, char *argv[])
         error("ERROR on binding");
     }
 
-    printf("My process ID : %d\n", getpid());
     listen(sockfd, SOMAXCONN);
 
-    clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-    if (newsockfd < 0) {
-        error("ERROR on accept");
-    }
+    printf("My process ID : %d\n", getpid());
+    while(1) {
+         msgsock = accept(sockfd, 0, 0);
+         if (msgsock == -1) {
+             perror("accept");
+         } else do {
+             bzero(buf, sizeof(buf));
+             if ((rval = (int) read(msgsock, buf, 1024)) < 0) {
+                 perror("reading stream message");
+             } else if (rval == 0) {
+                 printf("Ending connection\n");
+             } else {
+                 process_command(buf, out);
+                 printf("COMMAND-->%s\n", buf);
+                 printf("RESPONSE-->%s\n", out);
+                 write(msgsock, out, sizeof(out));
+             }
+         } while (rval > 0);
+         close(msgsock);
+     }
+     close(sockfd);
+}
 
-    bzero(buffer,256);
-    n = (int) read(newsockfd, buffer, 255);
-    if (n < 0) {
-        error("ERROR reading from socket");
+
+void process_command(const char *buf, char *out) {
+    if (strcmp(buf, COMMAND_TIME) == 0) {
+        get_current_time(out);
+    } else if (strcmp(buf, COMMAND_ECHO) == 0) {
+
+    } else if (strcmp(buf, COMMAND_CLOSE) == 0) {
+
     }
-    printf("Here is the message: %s\n",buffer);
-    n = (int) write(newsockfd, "I got your message", 18);
-    if (n < 0) {
-        error("ERROR writing to socket");
-    }
-    close(newsockfd);
-    close(sockfd);
-    return 0;
+}
+
+void get_current_time(char *out) {
+    struct tm *tm;
+    time_t t;
+    t = time(NULL);
+    tm = localtime(&t);
+    strftime(out, 30, "%F %X\n", tm);
 }
