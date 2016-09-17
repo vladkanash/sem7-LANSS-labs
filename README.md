@@ -1,6 +1,6 @@
 # sem7-LANSS-labs
 BSUIR LAN System Software course labs
 
-Usage: 
-  build.sh - compiles & builds project
-  server.sh {port_number} - starts server
+Usage: <br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;**./build.sh** - compiles & builds project <br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;**./server.sh** _{port-number}_ - starts server
