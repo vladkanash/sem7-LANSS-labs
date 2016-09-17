@@ -17,9 +17,7 @@
 #include <netinet/in.h>
 #include <time.h>
 
-#define COMMAND_ECHO "ECHO\n"
-#define COMMAND_TIME "TIME\n"
-#define COMMAND_CLOSE "CLOSE\n"
+#include "commands.h"
 
 void process_command(const char *buf, char *out);
 void get_current_time(char *out);
@@ -32,17 +30,6 @@ void error(const char *msg)
 
 int main(int argc, char *argv[])
 {
-
-    time_t timer;
-    char buffer[26];
-    struct tm* tm_info;
-
-    time(&timer);
-    tm_info = localtime(&timer);
-
-    strftime(buffer, 26, "%Y:%m:%d %H:%M:%S", tm_info);
-    puts(buffer);
-
     int sockfd, portno, msgsock, rval;
     socklen_t clilen;
     char buf[256];
@@ -77,6 +64,7 @@ int main(int argc, char *argv[])
     listen(sockfd, SOMAXCONN);
 
     printf("My process ID : %d\n", getpid());
+    printf("Listening to port : %d\n", portno);
     while(1) {
          msgsock = accept(sockfd, 0, 0);
          if (msgsock == -1) {
@@ -98,7 +86,6 @@ int main(int argc, char *argv[])
      }
      close(sockfd);
 }
-
 
 void process_command(const char *buf, char *out) {
     if (strcmp(buf, COMMAND_TIME) == 0) {
