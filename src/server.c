@@ -13,6 +13,14 @@
 
 #include "commands.h"
 
+#define BUF_SIZE 256
+
+int fd_hwm = 0;
+fd_set set;
+
+void echo_message(char *in_buf, char *out_buf);
+void process_command(int fd, char *in_buf, char *out_buf);
+
 void get_current_time(char *out) {
     struct tm *tm;
     time_t t;
@@ -29,13 +37,12 @@ bool startsWith(const char *pre, const char *str)
 }
 
 void run_server(struct sockaddr_in *sap) {
-    int fd_skt, fd_client, fd_hwm = 0, fd;
-    char buf[256];
-    char out[256];
-    memset(buf, 0, sizeof(buf));
-    memset(out, 0, sizeof(out));
-    fd_set set, read_set;
-    ssize_t  nread;
+    int fd_skt, fd_client, fd;
+    char in_buf[BUF_SIZE];
+    char out_buf[BUF_SIZE];
+    memset(in_buf, 0, sizeof(in_buf));
+    memset(out_buf, 0, sizeof(out_buf));
+    fd_set read_set;
 
     fd_skt = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -69,30 +76,37 @@ void run_server(struct sockaddr_in *sap) {
                         fd_hwm = fd_client;
                     }
                 } else {
-                nread = read(fd, buf, sizeof(buf));
-                    //process message
-                    if (strcmp(buf, COMMAND_TIME) == 0) {
-                        get_current_time(out);
-                    } else if (startsWith(COMMAND_ECHO, buf)) {
-                        memcpy(out, buf, sizeof(buf));
-                        memmove(out, out+5, sizeof(out));
-                    } else if (strcmp(buf, COMMAND_CLOSE) == 0 || nread == 0) {
-                        FD_CLR(fd, &set);
-                        if (fd == fd_hwm) {
-                            fd_hwm--;
-                        }
-                        memset(out, 0, sizeof(out));
-                        close(fd);
-                    } else {
-                        memset(out, 0, sizeof(out));
-                    }
-                    memset(buf, 0, sizeof(buf));
-                    write(fd, out, sizeof(out));
+                    ssize_t nread = read(fd, in_buf, sizeof(in_buf));
+                    process_command(fd, in_buf, out_buf);
                 }
             }
         }
     }
     close(fd_skt);
     return;
+}
+
+void process_command(int fd, char *in_buf, char *out_buf) {
+    if (strcmp(in_buf, COMMAND_TIME) == 0) {
+        get_current_time(out_buf);
+    } else if (startsWith(COMMAND_ECHO, in_buf)) {
+        echo_message(in_buf, out_buf);
+    } else if (strcmp(in_buf, COMMAND_CLOSE) == 0) {
+        FD_CLR(fd, &set);
+        if (fd == fd_hwm) {
+            fd_hwm--;
+        }
+        memset(out_buf, 0, BUF_SIZE);
+        close(fd);
+    } else {
+        memset(out_buf, 0, BUF_SIZE);
+    }
+    memset(in_buf, 0, BUF_SIZE);
+    write(fd, out_buf, BUF_SIZE);
+}
+
+void echo_message(char *in_buf, char *out_buf) {
+    memcpy(out_buf, in_buf, BUF_SIZE);
+    memmove(out_buf, out_buf+5, BUF_SIZE);
 }
 
