@@ -1,4 +1,4 @@
 
-#define COMMAND_ECHO "ECHO\n"
+#define COMMAND_ECHO "ECHO "
 #define COMMAND_TIME "TIME\n"
 #define COMMAND_CLOSE "CLOSE\n"

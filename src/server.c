@@ -1,101 +1,17 @@
 //
-// Created by vladkanash on 16.9.16.
+// Created by vladkanash on 7.10.16.
 //
 
-/* A simple server in the internet domain using TCP
-   The port number is passed as an argument
-
-   Usage:
-        Start this, then do 'nc 127.0.0.1 [port_number]'
-        and send ur messages*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <time.h>
+#include <stdbool.h>
 
 #include "commands.h"
-
-void process_command(const char *buf, char *out);
-void get_current_time(char *out);
-
-void error(const char *msg)
-{
-    perror(msg);
-    exit(1);
-}
-
-int main(int argc, char *argv[])
-{
-    int sockfd, portno, msgsock, rval;
-    socklen_t clilen;
-    char buf[256];
-    char out[256];
-    memset(buf, 0, sizeof(buf));
-    memset(out, 0, sizeof(out));
-    struct sockaddr_in serv_addr, cli_addr;
-
-    if (argc < 2) {
-        fprintf(stderr,"ERROR, no port provided\n");
-        exit(1);
-    }
-
-    portno = atoi(argv[1]);
-
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (sockfd < 0) {
-        error("ERROR opening socket");
-    }
-
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons((uint16_t) portno);
-
-    if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        error("ERROR on binding");
-    }
-
-    listen(sockfd, SOMAXCONN);
-
-    printf("My process ID : %d\n", getpid());
-    printf("Listening to port : %d\n", portno);
-    while(1) {
-         msgsock = accept(sockfd, 0, 0);
-         if (msgsock == -1) {
-             perror("accept");
-         } else do {
-             bzero(buf, sizeof(buf));
-             if ((rval = (int) read(msgsock, buf, 1024)) < 0) {
-                 perror("reading stream message");
-             } else if (rval == 0) {
-                 printf("Ending connection\n");
-             } else {
-                 process_command(buf, out);
-                 printf("COMMAND-->%s\n", buf);
-                 printf("RESPONSE-->%s\n", out);
-                 write(msgsock, out, sizeof(out));
-             }
-         } while (rval > 0);
-         close(msgsock);
-     }
-     close(sockfd);
-}
-
-void process_command(const char *buf, char *out) {
-    if (strcmp(buf, COMMAND_TIME) == 0) {
-        get_current_time(out);
-    } else if (strcmp(buf, COMMAND_ECHO) == 0) {
-
-    } else if (strcmp(buf, COMMAND_CLOSE) == 0) {
-
-    }
-}
 
 void get_current_time(char *out) {
     struct tm *tm;
@@ -104,3 +20,79 @@ void get_current_time(char *out) {
     tm = localtime(&t);
     strftime(out, 30, "%F %X\n", tm);
 }
+
+bool startsWith(const char *pre, const char *str)
+{
+    size_t lenpre = strlen(pre),
+            lenstr = strlen(str);
+    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
+}
+
+void run_server(struct sockaddr_in *sap) {
+    int fd_skt, fd_client, fd_hwm = 0, fd;
+    char buf[256];
+    char out[256];
+    memset(buf, 0, sizeof(buf));
+    memset(out, 0, sizeof(out));
+    fd_set set, read_set;
+    ssize_t  nread;
+
+    fd_skt = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (bind(fd_skt, (struct sockaddr*) sap, sizeof(*sap)) < 0) {
+        perror("error while binding socket");
+        exit(-1);
+    }
+
+    if (listen(fd_skt, SOMAXCONN) < 0) {
+        perror("error while trying to listen");
+        exit(-1);
+    }
+
+    if (fd_skt > fd_hwm) {
+        fd_hwm = fd_skt;
+    }
+
+    FD_ZERO(&set);
+    FD_SET(fd_skt, &set);
+
+    bool running = true;
+    while (running) {
+        read_set = set;
+        select(fd_hwm + 1, &read_set, NULL, NULL, NULL);
+        for (fd = 0; fd <= fd_hwm; fd++) {
+            if (FD_ISSET(fd, &read_set)) {
+                if (fd == fd_skt) {
+                    fd_client = accept(fd_skt, NULL, 0);
+                    FD_SET(fd_client, &set);
+                    if (fd_client > fd_hwm) {
+                        fd_hwm = fd_client;
+                    }
+                } else {
+                nread = read(fd, buf, sizeof(buf));
+                    //process message
+                    if (strcmp(buf, COMMAND_TIME) == 0) {
+                        get_current_time(out);
+                    } else if (startsWith(COMMAND_ECHO, buf)) {
+                        memcpy(out, buf, sizeof(buf));
+                        memmove(out, out+5, sizeof(out));
+                    } else if (strcmp(buf, COMMAND_CLOSE) == 0 || nread == 0) {
+                        FD_CLR(fd, &set);
+                        if (fd == fd_hwm) {
+                            fd_hwm--;
+                        }
+                        memset(out, 0, sizeof(out));
+                        close(fd);
+                    } else {
+                        memset(out, 0, sizeof(out));
+                    }
+                    memset(buf, 0, sizeof(buf));
+                    write(fd, out, sizeof(out));
+                }
+            }
+        }
+    }
+    close(fd_skt);
+    return;
+}
+
