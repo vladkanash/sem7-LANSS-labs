@@ -114,9 +114,13 @@ void input_data(int fd) {
         nread = recv(fd, in_buf, sizeof(in_buf), MSG_PEEK);
         command = get_command(in_buf);
         if (command.success) {
-            response = process_command(command);
-            if (response.close_connection) {
-                close_connection(fd);
+            if (command.simple) {
+                response = process_command(command);
+                if (response.type == CLOSE) {
+                    close_connection(fd);
+                }
+            } else {
+                //while ()
             }
             recv(fd, in_buf, command.text + command.command_length - in_buf, 0);
             write(fd, response.text, response.text_length);
@@ -172,16 +176,15 @@ command_response process_command(server_command command) {
     command_response result;
     memset(&result, 0, sizeof(result));
     if (command.type == TIME) {
+        result.type = command.type;
         get_current_time(&result);
         result.text_length = 30;
         result.success = true;
-        result.close_connection = false;
     } else if (command.type == CLOSE) {
-        result.close_connection = true;
+        result.type = command.type;
         result.success = true;
     } else {
         result.success = false;
-        result.close_connection = false;
     }
     return result;
 }

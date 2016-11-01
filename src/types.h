@@ -7,7 +7,7 @@
 
 #include <stdbool.h>
 
-typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD} commands;
+typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD, KILL} commands;
 
 typedef struct server_command {
     char* text;
@@ -20,7 +20,7 @@ typedef struct server_command {
 typedef struct command_response {
     char* text;
     unsigned text_length;
-    bool close_connection;
+    commands type;
     bool success;
 } command_response;
 
