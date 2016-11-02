@@ -15,7 +15,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include "server.h"
+#include "server/server.h"
 
 int main(int argc, char *argv[])
 {

@@ -1,9 +1,6 @@
-
 #define COMMAND_ECHO "ECHO "
-
 #define COMMAND_TIME "TIME"
 #define COMMAND_CLOSE "CLOSE"
-
 #define COMMAND_UPLOAD "UPLOAD "
 #define COMMAND_DOWNLOAD "DOWNLOAD "
 
@@ -11,6 +8,9 @@
 #define COMMAND_ECHO_LENGTH 10
 #define COMMAND_TIME_LENGTH 4
 #define COMMAND_CLOSE_LENGTH 5
+
+#define BUF_SIZE 256
+#define COMMAND_LENGTH 16
 
 #define COMMAND_END_1 "\n"
 #define COMMAND_END_2 "\r\n"
