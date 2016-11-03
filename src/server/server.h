@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #ifndef LANSS_SERVER_H
 #define LANSS_SERVER_H
 

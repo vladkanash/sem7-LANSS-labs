@@ -19,6 +19,7 @@
 
 int fd_hwm = 0;
 fd_set set;
+server_command command_list[256];
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -78,32 +79,67 @@ void input_data(int fd) {
     server_command command;
     command_response response;
 
-    do {
-        nread = recv(fd, in_buf, sizeof(in_buf), MSG_PEEK);
-        command = get_command(in_buf);
-        if (command.success) {
-            if (command.simple) {
-                response = process_command(command);
-                if (response.type == CLOSE) {
-                    close_connection(fd);
+    server_state current_state = command_list[fd].state;
+    switch (current_state) {
+        case INITIAL : {
+            do {
+                nread = recv(fd, in_buf, sizeof(in_buf), MSG_PEEK);
+                command = get_command(in_buf);
+                if (command.success) {
+                    command_list[fd] = command;
+                    if (command.simple) {
+                        response = process_command(command);
+                        if (response.type == CLOSE) {
+                            cleanup(in_buf, out_buf, &command, &response);
+                            close_connection(fd);
+                        }
+                        recv(fd, in_buf, command.text + command.command_length - in_buf, NULL); //remove simple command
+                    } else {
+                        command_list[fd].state = PARSING;
+                        recv(fd, in_buf, command.text + command.command_length - in_buf, NULL); //remove first part of long command
+                        break;
+                    }
+                    write(fd, response.text, response.text_length);
+                    cleanup(in_buf, out_buf, &command, &response);
+                } else if (nread > COMMAND_MAX_LENGTH) {
+                    recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), NULL); //remove garbage text with no commands found
                 }
-            } else {
-                //while ()
-            }
-            recv(fd, in_buf, command.text + command.command_length - in_buf, 0);
-            write(fd, response.text, response.text_length);
-            cleanup(in_buf, out_buf, &command, &response);
-        } else if (nread > COMMAND_LENGTH) {
-            recv(fd, in_buf, (size_t) (nread - COMMAND_LENGTH), 0);
+            } while (nread == sizeof(in_buf));
+            break;
         }
-    } while (nread == sizeof(in_buf));
+        case PARSING : {
+            size_t old_size, read_size = BUF_SIZE;
+            char* buf = malloc(sizeof(char) * read_size);
+            command = command_list[fd];
+            do {
+                old_size = read_size;
+                nread = recv(fd, buf, read_size, MSG_PEEK);
+
+                if (get_long_command(buf, &command)) {
+                    response = process_command(command);
+                    command_list[fd].state = response.next_state;
+                    recv(fd, buf, command.command_length, NULL); //remove text part of long command
+                    write(fd, response.text, response.text_length);
+                    cleanup(in_buf, out_buf, &command, &response);
+                } else {
+                    read_size *= 2;
+                    buf = realloc(buf, sizeof(char) * read_size);
+                }
+            } while (nread == old_size);
+            free(buf);
+            break;
+        }
+        case UPLOADING : {
+            break;
+        }
+    }
 }
 
 void close_connection(int fd) {
     FD_CLR(fd, &set);
     if (fd == fd_hwm) {
-            fd_hwm--;
-        }
+        fd_hwm--;
+    }
     close(fd);
 }
 
