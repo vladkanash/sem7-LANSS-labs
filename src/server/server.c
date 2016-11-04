@@ -18,13 +18,12 @@
 #include "../constants.h"
 
 int fd_hwm = 0;
-fd_set set;
+fd_set read_set, write_set;
 server_command command_list[MAX_CLIENTS];
-int downloading[MAX_CLIENTS];
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
-    fd_set read_set;
+    fd_set read_buf, write_buf;
 
     fd_skt = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -42,15 +41,16 @@ void run_server(struct sockaddr_in *sap) {
         fd_hwm = fd_skt;
     }
 
-    FD_ZERO(&set);
-    FD_SET(fd_skt, &set);
+    FD_ZERO(&read_set);
+    FD_SET(fd_skt, &read_set);
 
     bool running = true;
     while (running) {
-        read_set = set;
-        select(fd_hwm + 1, &read_set, NULL, NULL, NULL);
+        read_buf = read_set;
+        write_buf = write_set;
+        select(fd_hwm + 1, &read_buf, &write_buf, NULL, NULL);
         for (fd = 0; fd <= fd_hwm; fd++) {
-            if (FD_ISSET(fd, &read_set)) {
+            if (FD_ISSET(fd, &read_buf) || FD_ISSET(fd, &write_buf)) {
                 if (fd == fd_skt) {
                     add_client(fd);
                 } else {
@@ -65,13 +65,13 @@ void run_server(struct sockaddr_in *sap) {
 
 void add_client(int fd) {
     int fd_client = accept(fd, NULL, 0);
-    FD_SET(fd_client, &set);
+    FD_SET(fd_client, &read_set);
     if (fd_client > fd_hwm) {
         fd_hwm = fd_client;
     }
 }
 
-void upload_file(int fd) {
+void start_file_upload(int fd) {
     server_command command = command_list[fd];
     char* file_path = command.text;
     int offset;
@@ -82,13 +82,19 @@ void upload_file(int fd) {
 
     int file = open(file_path, O_RDONLY);
     if (file == -1) {
-        memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "File %s cannot be found on server", file_path);
         perror("Can't open file");
+        memset(out_buf, 0, BUF_SIZE);
+        sprintf(out_buf, "Cannot find file on server: %s ", file_path);
+        write(fd, out_buf, BUF_SIZE);
+        command_list[fd].state = INITIAL;
         return;
     }
     if (fstat(file, &file_stat) < 0) {
         perror("fstat error");
+        memset(out_buf, 0, BUF_SIZE);
+        sprintf(out_buf, "There was an error opening file %s", file_path);
+        write(fd, out_buf, BUF_SIZE);
+        command_list[fd].state = INITIAL;
         return;
     }
     fprintf(stdout, "File size = %li bytes", file_stat.st_size);
@@ -114,7 +120,7 @@ void input_data(int fd) {
             break;
         }
         case UPLOADING : {
-            upload_file(fd);
+            start_file_upload(fd);
             break;
         }
     }
@@ -145,7 +151,7 @@ void parse_command_start(int fd) {
                 break;
             }
             write(fd, response.text, response.text_length);
-            cleanup(in_buf, out_buf, &command, &response);
+            free(response.text);
         } else if (nread > COMMAND_MAX_LENGTH) {
             recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
         }
@@ -170,6 +176,7 @@ void parse_command_end(int fd) {
             command.state = response.next_state;
             command_list[fd] = command;
             write(fd, response.text, response.text_length);
+            FD_SET(fd, &write_set);
             free(response.text);
         } else {
             read_size *= 2;
@@ -180,7 +187,7 @@ void parse_command_end(int fd) {
 }
 
 void close_connection(int fd) {
-    FD_CLR(fd, &set);
+    FD_CLR(fd, &read_set);
     if (fd == fd_hwm) {
         fd_hwm--;
     }
