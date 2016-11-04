@@ -19,7 +19,8 @@
 
 int fd_hwm = 0;
 fd_set set;
-server_command command_list[256];
+server_command command_list[MAX_CLIENTS];
+int downloading[MAX_CLIENTS];
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -70,91 +71,19 @@ void add_client(int fd) {
     }
 }
 
-void input_data(int fd) {
-    char in_buf[BUF_SIZE];
-    char out_buf[BUF_SIZE];
-    memset(in_buf, 0, sizeof(in_buf));
-    memset(out_buf, 0, sizeof(out_buf));
-    ssize_t nread = 0;
-    server_command command;
-    command_response response;
-
-    server_state current_state = command_list[fd].state;
-    switch (current_state) {
-        case INITIAL : {
-            do {
-                nread = recv(fd, in_buf, sizeof(in_buf), MSG_PEEK);
-                command = get_command(in_buf);
-                if (command.success) {
-                    command_list[fd] = command;
-                    if (command.simple) {
-                        response = process_command(command);
-                        if (response.type == CLOSE) {
-                            cleanup(in_buf, out_buf, &command, &response);
-                            close_connection(fd);
-                        }
-                        recv(fd, in_buf, command.text + command.command_length - in_buf, NULL); //remove simple command
-                    } else {
-                        command_list[fd].state = PARSING;
-                        recv(fd, in_buf, command.text + command.command_length - in_buf, NULL); //remove first part of long command
-                        break;
-                    }
-                    write(fd, response.text, response.text_length);
-                    cleanup(in_buf, out_buf, &command, &response);
-                } else if (nread > COMMAND_MAX_LENGTH) {
-                    recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), NULL); //remove garbage text with no commands found
-                }
-            } while (nread == sizeof(in_buf));
-            break;
-        }
-        case PARSING : {
-            size_t old_size, read_size = BUF_SIZE;
-            char* buf = malloc(sizeof(char) * read_size);
-            command = command_list[fd];
-            do {
-                old_size = read_size;
-                nread = recv(fd, buf, read_size, MSG_PEEK);
-
-                if (get_long_command(buf, &command)) {
-                    response = process_command(command);
-                    command_list[fd].state = response.next_state;
-                    recv(fd, buf, command.command_length, NULL); //remove text part of long command
-                    write(fd, response.text, response.text_length);
-                    cleanup(in_buf, out_buf, &command, &response);
-                } else {
-                    read_size *= 2;
-                    buf = realloc(buf, sizeof(char) * read_size);
-                }
-            } while (nread == old_size);
-            free(buf);
-            break;
-        }
-        case UPLOADING : {
-            break;
-        }
-    }
-}
-
-void close_connection(int fd) {
-    FD_CLR(fd, &set);
-    if (fd == fd_hwm) {
-        fd_hwm--;
-    }
-    close(fd);
-}
-
-void download_file(char *buf, char *out_buf, int fd) {
+void upload_file(int fd) {
+    server_command command = command_list[fd];
+    char* file_path = command.text;
     int offset;
     ssize_t sent_bytes;
     __off_t remain_data;
     struct stat file_stat;
-    memmove(buf, buf + sizeof(COMMAND_DOWNLOAD) - 1, BUF_SIZE);
-    buf[strlen(buf) - 1] = '\0';
+    static char out_buf[BUF_SIZE];
 
-    int file = open(buf, O_RDONLY);
+    int file = open(file_path, O_RDONLY);
     if (file == -1) {
         memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "File %s cannot be found on server", buf);
+        sprintf(out_buf, "File %s cannot be found on server", file_path);
         perror("Can't open file");
         return;
     }
@@ -171,5 +100,90 @@ void download_file(char *buf, char *out_buf, int fd) {
         sent_bytes, offset, remain_data);
         remain_data -= sent_bytes;
     }
+}
+
+void input_data(int fd) {
+    server_state current_state = command_list[fd].state;
+    switch (current_state) {
+        case INITIAL : {
+            parse_command_start(fd);
+            break;
+        }
+        case PARSING : {
+            parse_command_end(fd);
+            break;
+        }
+        case UPLOADING : {
+            upload_file(fd);
+            break;
+        }
+    }
+}
+
+void parse_command_start(int fd) {
+    static char in_buf[BUF_SIZE];
+    static char out_buf[BUF_SIZE];
+    memset(in_buf, 0, sizeof(in_buf));
+    memset(out_buf, 0, sizeof(out_buf));
+    server_command command;
+    command_response response;
+    ssize_t nread = 0;
+    do {
+        nread = recv(fd, in_buf, BUF_SIZE, MSG_PEEK);
+        command = get_command(in_buf);
+        if (command.success) {
+            command_list[fd] = command;
+            if (command.simple) {
+                response = process_command(command);
+                if (response.type == CLOSE) {
+                    close_connection(fd);
+                }
+                recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove simple command
+            } else {
+                command_list[fd].state = PARSING;
+                recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove first part of long command
+                break;
+            }
+            write(fd, response.text, response.text_length);
+            cleanup(in_buf, out_buf, &command, &response);
+        } else if (nread > COMMAND_MAX_LENGTH) {
+            recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
+        }
+    } while (nread == sizeof(in_buf));
+}
+
+void parse_command_end(int fd) {
+    server_command command;
+    command_response response;
+    ssize_t nread;
+    size_t old_size, read_size = BUF_SIZE;
+    char* buf = malloc(sizeof(char) * read_size);
+    command = command_list[fd];
+
+    do {
+        old_size = read_size;
+        nread = recv(fd, buf, read_size, MSG_PEEK);
+
+        if (get_long_command(buf, &command)) {
+            response = process_command(command);
+            recv(fd, buf, command.command_length, 0); //remove text part of long command
+            command.state = response.next_state;
+            command_list[fd] = command;
+            write(fd, response.text, response.text_length);
+            free(response.text);
+        } else {
+            read_size *= 2;
+            buf = realloc(buf, sizeof(char) * read_size);
+        }
+    } while (nread == old_size);
+    free(buf);
+}
+
+void close_connection(int fd) {
+    FD_CLR(fd, &set);
+    if (fd == fd_hwm) {
+        fd_hwm--;
+    }
+    close(fd);
 }
 

@@ -5,11 +5,7 @@
 
 void get_current_time(command_response* result);
 
-void echo_message(char *in_buf, char *out_buf);
-
 command_response process_command(server_command command);
-
-void download_file(char *buf, char *out_buf, int i);
 
 bool parse_command(char *input, char* command_type, int command_len, server_command* command);
 

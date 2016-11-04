@@ -35,19 +35,19 @@ server_command get_command(char *buf) {
         memset(&result, 0, sizeof(result));
         result[i].success = false;
     }
-    if (parse_long_command(buf, COMMAND_ECHO, COMMAND_ECHO_LENGTH, &result[0])) {
+    if (parse_long_command(buf, COMMAND_ECHO, sizeof(COMMAND_ECHO) - 1, &result[0])) {
         result[0].type = ECHO;
         result[0].simple = false;
         result[0].success = true;
-    }else if (parse_command(buf, COMMAND_TIME, COMMAND_TIME_LENGTH, &result[1])) {
+    }else if (parse_command(buf, COMMAND_TIME, sizeof(COMMAND_TIME) - 1, &result[1])) {
         result[1].type = TIME;
         result[1].simple = true;
         result[1].success = true;
-    } else if (parse_command(buf, COMMAND_CLOSE, COMMAND_CLOSE_LENGTH, &result[2])) {
+    } else if (parse_command(buf, COMMAND_CLOSE, sizeof(COMMAND_CLOSE) - 1, &result[2])) {
         result[2].type = CLOSE;
         result[2].simple = true;
         result[2].success = true;
-    } else if (parse_long_command(buf, COMMAND_DOWNLOAD, COMMAND_DOWNLOAD_LENGTH, &result[3])) {
+    } else if (parse_long_command(buf, COMMAND_DOWNLOAD, sizeof(COMMAND_DOWNLOAD) - 1, &result[3])) {
         result[3].type = DOWNLOAD;
         result[3].simple = false;
         result[3].success = true;
@@ -98,29 +98,43 @@ command_response process_command(server_command command) {
     command_response result;
     memset(&result, 0, sizeof(result));
     result.next_state = INITIAL;
-    if (command.type == TIME) {
-        result.type = command.type;
-        get_current_time(&result);
-        result.text_length = 30;
-        result.success = true;
-    } else if (command.type == CLOSE) {
-        result.type = command.type;
-        result.success = true;
-    } else if (command.type == ECHO) {
-        result.type = command.type;
-        result.text_length = (unsigned int) command.command_length;
-        result.text = malloc(command.command_length * sizeof(char));
-        strcpy(result.text, command.text);
-        result.success = true;
-    } else {
-        result.success = false;
+
+    switch (command.type) {
+        case TIME : {
+            result.type = command.type;
+            get_current_time(&result);
+            result.text_length = 30;
+            result.success = true;
+            break;
+        }
+        case CLOSE : {
+            result.type = command.type;
+            result.success = true;
+            break;
+        }
+        case ECHO : {
+            result.type = command.type;
+            result.text_length = (unsigned int) command.command_length;
+            result.text = malloc(command.command_length * sizeof(char));
+            strcpy(result.text, command.text);
+            result.success = true;
+            break;
+        }
+        case DOWNLOAD : {
+            result.type = command.type;
+            result.text_length = (unsigned int) command.command_length;
+            result.text = malloc(command.command_length * sizeof(char));
+            strcpy(result.text, command.text);
+            result.next_state = UPLOADING;
+            result.success = true;
+            break;
+        }
+        default : {
+            result.success = false;
+            break;
+        }
     }
     return result;
-}
-
-void echo_message(char *in_buf, char *out_buf) {
-    memcpy(out_buf, in_buf, BUF_SIZE);
-    memmove(out_buf, out_buf+5, BUF_SIZE);
 }
 
 bool startsWith(const char *pre, const char *str) {

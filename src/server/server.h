@@ -12,4 +12,8 @@ void add_client(int fd);
 
 void close_connection(int fd);
 
+void parse_command_end(int fd);
+
+void parse_command_start(int fd);
+
 #endif //LANSS_SERVER_H
