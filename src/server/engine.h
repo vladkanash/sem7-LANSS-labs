@@ -13,8 +13,6 @@ server_command get_command(char *buf);
 
 bool get_long_command(char* buf, server_command *command);
 
-void cleanup(char *in_buf, char *out_buf, server_command *command, command_response *response);
-
 bool startsWith(const char *pre, const char *str);
 
 #endif //LANSS_ENGINE_H

@@ -16,9 +16,6 @@ void cleanup(char *in_buf, char *out_buf, server_command *command, command_respo
     memset(in_buf, 0, BUF_SIZE);
     memset(command, 0, sizeof(server_command));
     memset(response, 0, sizeof(command_response));
-    if (!command->simple) {
-        free(command->text);
-    }
 }
 
 bool parse_long_command(char *input, char *command_type, int command_len, server_command* command) {
@@ -109,6 +106,8 @@ command_response process_command(server_command command) {
         }
         case CLOSE : {
             result.type = command.type;
+            result.text = malloc(23 * sizeof(char));
+            sprintf(result.text, "Closing connection...\r\n");
             result.success = true;
             break;
         }
@@ -117,14 +116,15 @@ command_response process_command(server_command command) {
             result.text_length = (unsigned int) command.command_length;
             result.text = malloc(command.command_length * sizeof(char));
             strcpy(result.text, command.text);
+            free(command.text);
             result.success = true;
             break;
         }
         case DOWNLOAD : {
             result.type = command.type;
-            result.text_length = (unsigned int) command.command_length;
-            result.text = malloc(command.command_length * sizeof(char));
-            strcpy(result.text, command.text);
+            result.text_length = (unsigned int) command.command_length + 28;
+            result.text = malloc((command.command_length + 28) * sizeof(char));
+            sprintf(result.text, "Request to download file: %s\r\n", command.text);
             result.next_state = UPLOADING;
             result.success = true;
             break;
