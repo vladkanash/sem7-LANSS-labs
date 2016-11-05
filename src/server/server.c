@@ -6,16 +6,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/sendfile.h>
-#include <netinet/in.h>
-#include <stdbool.h>
+//#include <sys/socket.h>
+//#include <sys/sendfile.h>
+//#include <netinet/in.h>
+#include "stdbool.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "server.h"
 #include "engine.h"
 #include "../constants.h"
+
+// WINDOWS LIBS 
+#include <winsock2.h>
+#include <process.h>
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
@@ -25,7 +29,14 @@ void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
     fd_set read_buf, write_buf;
 
-    fd_skt = socket(AF_INET, SOCK_STREAM, 0);
+    //fd_skt = socket(AF_INET, SOCK_STREAM, 0);
+
+	//Create a socket
+    if((fd_skt = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET) {
+        printf("Could not create socket : %d" , WSAGetLastError());
+    }
+ 
+    printf("Socket created.\n");
 
     if (bind(fd_skt, (struct sockaddr*) sap, sizeof(*sap)) < 0) {
         perror("error while binding socket");
@@ -48,7 +59,7 @@ void run_server(struct sockaddr_in *sap) {
     while (running) {
         read_buf = read_set;
         write_buf = write_set;
-        select(fd_hwm + 1, &read_buf, &write_buf, NULL, NULL);
+        select(fd_hwm + 1, &read_buf, &write_buf, 0, 0);
         for (fd = 0; fd <= fd_hwm; fd++) {
             if (FD_ISSET(fd, &read_buf) || FD_ISSET(fd, &write_buf)) {
                 if (fd == fd_skt) {
@@ -59,12 +70,13 @@ void run_server(struct sockaddr_in *sap) {
             }
         }
     }
-    close(fd_skt);
+	//
+    closesocket(fd_skt);
     return;
 }
 
 void add_client(int fd) {
-    int fd_client = accept(fd, NULL, 0);
+   int fd_client = accept(fd, 0, 0);
     FD_SET(fd_client, &read_set);
     if (fd_client > fd_hwm) {
         fd_hwm = fd_client;
@@ -75,15 +87,17 @@ void start_file_upload(int fd) {
     server_command command = command_list[fd];
     char* file_path = command.text;
     int offset;
-    ssize_t sent_bytes;
-    __off_t remain_data;
-    struct stat file_stat;
+    //ssize_t sent_bytes;
+    //__off_t remain_data;
+	_off_t remain_data;
+
+	struct stat file_stat;
     static char out_buf[BUF_SIZE];
 
     int file = open(file_path, O_RDONLY);
-    if (file == -1) {
+	if (file == -1) {
         perror("Can't open file");
-        memset(out_buf, 0, BUF_SIZE);
+		memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "Cannot find file on server: %s ", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -91,7 +105,7 @@ void start_file_upload(int fd) {
     }
     if (fstat(file, &file_stat) < 0) {
         perror("fstat error");
-        memset(out_buf, 0, BUF_SIZE);
+		memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "There was an error opening file %s", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -101,11 +115,12 @@ void start_file_upload(int fd) {
 
     offset = 0;
     remain_data = file_stat.st_size;
-    while ((sent_bytes = sendfile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
+    //while ((sent_bytes = sendfile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
+    /*while ((sent_bytes = TransmitFile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
         fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
         sent_bytes, offset, remain_data);
         remain_data -= sent_bytes;
-    }
+    }*/
 }
 
 void input_data(int fd) {
@@ -150,7 +165,8 @@ void parse_command_start(int fd) {
                 recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove first part of long command
                 break;
             }
-            write(fd, response.text, response.text_length);
+            //write(fd, response.text, response.text_length);
+			send(fd, response.text, response.text_length, 0);
             free(response.text);
         } else if (nread > COMMAND_MAX_LENGTH) {
             recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
@@ -163,7 +179,7 @@ void parse_command_end(int fd) {
     command_response response;
     ssize_t nread;
     size_t old_size, read_size = BUF_SIZE;
-    char* buf = malloc(sizeof(char) * read_size);
+    char* buf = (char*)malloc(sizeof(char) * read_size);
     command = command_list[fd];
 
     do {
@@ -175,12 +191,13 @@ void parse_command_end(int fd) {
             recv(fd, buf, command.command_length, 0); //remove text part of long command
             command.state = response.next_state;
             command_list[fd] = command;
-            write(fd, response.text, response.text_length);
+            //write(fd, response.text, response.text_length);
+			send(fd, response.text, response.text_length, 0);
             FD_SET(fd, &write_set);
-            free(response.text);
+			free(response.text);
         } else {
             read_size *= 2;
-            buf = realloc(buf, sizeof(char) * read_size);
+            buf = (char*)realloc(buf, sizeof(char) * read_size);
         }
     } while (nread == old_size);
     free(buf);
@@ -191,6 +208,6 @@ void close_connection(int fd) {
     if (fd == fd_hwm) {
         fd_hwm--;
     }
-    close(fd);
+	//
+    closesocket(fd);
 }
-

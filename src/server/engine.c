@@ -73,7 +73,7 @@ bool get_long_command(char* buf, server_command *command) {
     if (NULL != start) {
         unsigned long size = start - buf + end_length;
         command->command_length = size;
-        command->text = malloc(size);
+        command->text = (char*)malloc(size);
         strncpy(command->text, buf, size);
         return true;
     }
@@ -106,7 +106,7 @@ command_response process_command(server_command command) {
         }
         case CLOSE : {
             result.type = command.type;
-            result.text = malloc(23 * sizeof(char));
+            result.text = (char*)malloc(23 * sizeof(char));
             sprintf(result.text, "Closing connection...\r\n");
             result.success = true;
             break;
@@ -114,7 +114,7 @@ command_response process_command(server_command command) {
         case ECHO : {
             result.type = command.type;
             result.text_length = (unsigned int) command.command_length;
-            result.text = malloc(command.command_length * sizeof(char));
+            result.text = (char*)malloc(command.command_length * sizeof(char));
             strcpy(result.text, command.text);
             free(command.text);
             result.success = true;
@@ -123,7 +123,7 @@ command_response process_command(server_command command) {
         case DOWNLOAD : {
             result.type = command.type;
             result.text_length = (unsigned int) command.command_length + 28;
-            result.text = malloc((command.command_length + 28) * sizeof(char));
+            result.text = (char*)malloc((command.command_length + 28) * sizeof(char));
             sprintf(result.text, "Request to download file: %s\r\n", command.text);
             result.next_state = UPLOADING;
             result.success = true;
@@ -149,8 +149,8 @@ void get_current_time(command_response* result) {
     time_t t;
     t = time(NULL);
     tm = localtime(&t);
-    result->text = malloc(sizeof(char) * size);
+    result->text = (char*)malloc(sizeof(char) * size);
     memset(result->text, 0, size);
-    strftime(result->text , size, "%F %X\n", tm);
+    strftime(result->text , size, "%X %X\n", tm); // первый ’ заменить на кодовое значение дл€ даты как в univeper
     result->text_length = size;
 }
