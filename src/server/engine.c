@@ -151,6 +151,6 @@ void get_current_time(command_response* result) {
     tm = localtime(&t);
     result->text = malloc(sizeof(char) * size);
     memset(result->text, 0, size);
-    strftime(result->text , size, "%F %X\n", tm);
+    strftime(result->text , size, "%Y-%m-%d %X\n", tm);
     result->text_length = size;
 }
