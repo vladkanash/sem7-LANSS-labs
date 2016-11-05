@@ -139,7 +139,7 @@ command_response process_command(server_command command) {
 
 bool startsWith(const char *pre, const char *str) {
     size_t lenpre = strlen(pre),
-            lenstr = strlen(str);
+    lenstr = strlen(str);
     return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
 }
 
@@ -151,6 +151,6 @@ void get_current_time(command_response* result) {
     tm = localtime(&t);
     result->text = (char*)malloc(sizeof(char) * size);
     memset(result->text, 0, size);
-    strftime(result->text , size, "%X %X\n", tm); // первый Х заменить на кодовое значение для даты как в univeper
+    strftime(result->text , size, "%X %X\n", tm); // first Х need to replase to data key work like in univeper
     result->text_length = size;
 }

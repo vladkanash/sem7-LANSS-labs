@@ -12,5 +12,4 @@
 #define COMMAND_END_1 "\n"
 #define COMMAND_END_2 "\r\n"
 
-
-#define CHUNK_SIZE 512
+#define CHUNK_SIZE 512s

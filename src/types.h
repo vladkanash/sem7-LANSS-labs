@@ -14,10 +14,10 @@ typedef enum server_state {INITIAL, UPLOADING, PARSING} server_state;
 typedef struct server_command {
     char* text;
     bool simple;
-	bool success;
-	commands type;
-	size_t command_length;
-	server_state state;
+	  bool success;
+	  commands type;
+	  size_t command_length;
+	  server_state state;
 } server_command;
 
 typedef struct command_response {

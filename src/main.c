@@ -22,13 +22,13 @@
 #include "server/server.h"
 
 int winsock_version(){
-	return (int)0x0202; // equal to windows macros MAKEWORD(2,2);
+	  return (int)0x0202; // equal to windows macros MAKEWORD(2,2);
 }
 
 int initialize_windows_sockets(int (*version)()){
-	WSADATA wsa;
+	  WSADATA wsa;
 
-	printf("Initialising Winsock...\n");
+	  printf("Initialising Winsock...\n");
     if (WSAStartup(version(), &wsa) != 0) {
         printf("Failed. Error Code : %d",WSAGetLastError());
         return 1;
@@ -36,27 +36,26 @@ int initialize_windows_sockets(int (*version)()){
 }
 
 void initialize_sokets(){
-	initialize_windows_sockets(winsock_version);
+    initialize_windows_sockets(winsock_version);
 }
 
-int main(int argc, char *argv[])
-{
-	int portno;
+int main(int argc, char *argv[]){
+	  int portno;
     struct sockaddr_in serv_addr;
 
     if (argc < 2) {
         fprintf(stderr,"ERROR, no port provided\n");
         exit(1);
     }
-	
-	initialize_sokets();
+    
+    initialize_sokets();
      
     printf("Initialised.\n");
 
     portno = atoi(argv[1]);
 
     //bzero((char *) &serv_addr, sizeof(serv_addr));
-	memset((char *) &serv_addr, 0, sizeof(serv_addr));
+    memset((char *) &serv_addr, 0, sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -64,7 +63,7 @@ int main(int argc, char *argv[])
 
 	//printf("My process ID : %d\n", getpid());
     printf("My process ID : %d\n", _getpid());
-	printf("Listening to port : %d\n", portno);
+    printf("Listening to port : %d\n", portno);
 
     run_server(&serv_addr);
 }

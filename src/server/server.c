@@ -31,7 +31,7 @@ void run_server(struct sockaddr_in *sap) {
 
     //fd_skt = socket(AF_INET, SOCK_STREAM, 0);
 
-	//Create a socket
+    //Create a socket
     if((fd_skt = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET) {
         printf("Could not create socket : %d" , WSAGetLastError());
     }
@@ -76,7 +76,7 @@ void run_server(struct sockaddr_in *sap) {
 }
 
 void add_client(int fd) {
-   int fd_client = accept(fd, 0, 0);
+    int fd_client = accept(fd, 0, 0);
     FD_SET(fd_client, &read_set);
     if (fd_client > fd_hwm) {
         fd_hwm = fd_client;
@@ -89,15 +89,15 @@ void start_file_upload(int fd) {
     int offset;
     //ssize_t sent_bytes;
     //__off_t remain_data;
-	_off_t remain_data;
+	  _off_t remain_data;
 
-	struct stat file_stat;
+	  struct stat file_stat;
     static char out_buf[BUF_SIZE];
 
     int file = open(file_path, O_RDONLY);
-	if (file == -1) {
+	  if (file == -1) {
         perror("Can't open file");
-		memset(out_buf, 0, BUF_SIZE);
+		    memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "Cannot find file on server: %s ", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -105,7 +105,7 @@ void start_file_upload(int fd) {
     }
     if (fstat(file, &file_stat) < 0) {
         perror("fstat error");
-		memset(out_buf, 0, BUF_SIZE);
+		    memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "There was an error opening file %s", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -166,8 +166,8 @@ void parse_command_start(int fd) {
                 break;
             }
             //write(fd, response.text, response.text_length);
-			send(fd, response.text, response.text_length, 0);
-            free(response.text);
+			      send(fd, response.text, response.text_length, 0);
+			      free(response.text);
         } else if (nread > COMMAND_MAX_LENGTH) {
             recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
         }
@@ -192,9 +192,9 @@ void parse_command_end(int fd) {
             command.state = response.next_state;
             command_list[fd] = command;
             //write(fd, response.text, response.text_length);
-			send(fd, response.text, response.text_length, 0);
+			      send(fd, response.text, response.text_length, 0);
             FD_SET(fd, &write_set);
-			free(response.text);
+			      free(response.text);
         } else {
             read_size *= 2;
             buf = (char*)realloc(buf, sizeof(char) * read_size);
@@ -208,6 +208,6 @@ void close_connection(int fd) {
     if (fd == fd_hwm) {
         fd_hwm--;
     }
-	//
+	  //
     closesocket(fd);
 }
