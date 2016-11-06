@@ -23,6 +23,7 @@ void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
     fd_set read_buf, write_buf;
 
+    init_commands();
 	fd_skt = initialize_socket();
 
     if (bind(fd_skt, (struct sockaddr*) sap, sizeof(*sap)) < 0) {
@@ -155,8 +156,9 @@ void parse_command_start(int fd) {
             }
 			send_data(fd, response.text, response.text_length, 0);
 			free(response.text);
-        } else if (nread > COMMAND_MAX_LENGTH) {
-            recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
+        } else {
+            size_t ndel = find_line_ending(in_buf);
+            recv(fd, in_buf, ndel, 0); //remove garbage text with no commands found
         }
     } while (nread == sizeof(in_buf));
 }

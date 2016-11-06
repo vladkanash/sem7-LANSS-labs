@@ -28,4 +28,11 @@ typedef struct command_response {
     server_state next_state;
 } command_response;
 
+typedef struct command_holder {
+	char* name;
+	unsigned length;
+	bool simple;
+	commands type;
+} command_holder;
+
 #endif //LANSS_TYPES_H

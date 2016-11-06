@@ -9,51 +9,40 @@
 #include <stdbool.h>
 
 #include "engine.h"
-#include "../constants.h"
+#include "../constants.h"-
 
-bool parse_long_command(char *input, char *command_type, int command_len, server_command* command) {
-    if ((command->text = strstr(input, command_type))) {
-        command->command_length = (size_t) command_len;
-    }
-    return NULL != command->text;
+static command_holder command_info[COMMAND_COUNT];
+
+void init_commands() {
+    command_info[0].type = ECHO;
+    command_info[0].simple = false;
+    command_info[0].length = sizeof(COMMAND_ECHO) - 1;
+    command_info[0].name = COMMAND_ECHO;
+
+    command_info[1].type = DOWNLOAD;
+    command_info[1].simple = false;
+    command_info[1].length = sizeof(COMMAND_DOWNLOAD) - 1;
+    command_info[1].name = COMMAND_DOWNLOAD;
+
+    command_info[2].type = TIME;
+    command_info[2].simple = true;
+    command_info[2].length = sizeof(COMMAND_TIME) - 1;
+    command_info[2].name = COMMAND_TIME;
+
+    command_info[3].type = CLOSE;
+    command_info[3].simple = true;
+    command_info[3].length = sizeof(COMMAND_CLOSE) - 1;
+    command_info[3].name = COMMAND_CLOSE;
 }
 
 server_command get_command(char *buf) {
-    server_command result[COMMAND_COUNT];
-    server_command* response = &result[0];
-    for (int i = 0; i < COMMAND_COUNT; i++) {
-        memset(&result, 0, sizeof(result));
-        result[i].success = false;
-    }
-    if (parse_long_command(buf, COMMAND_ECHO, sizeof(COMMAND_ECHO) - 1, &result[0])) {
-        result[0].type = ECHO;
-        result[0].simple = false;
-        result[0].success = true;
-    }else if (parse_command(buf, COMMAND_TIME, sizeof(COMMAND_TIME) - 1, &result[1])) {
-        result[1].type = TIME;
-        result[1].simple = true;
-        result[1].success = true;
-    } else if (parse_command(buf, COMMAND_CLOSE, sizeof(COMMAND_CLOSE) - 1, &result[2])) {
-        result[2].type = CLOSE;
-        result[2].simple = true;
-        result[2].success = true;
-    } else if (parse_long_command(buf, COMMAND_DOWNLOAD, sizeof(COMMAND_DOWNLOAD) - 1, &result[3])) {
-        result[3].type = DOWNLOAD;
-        result[3].simple = false;
-        result[3].success = true;
-    }
-    for (int i = 1; i < COMMAND_COUNT; i++) {
-        if (result[i].text != NULL) {
-            response = &result[i];
-        }
-    }
-    for (int i = 1; i < COMMAND_COUNT; i++) {
-        if (result[i].text != NULL && result[i].text < response->text) {
-            response = &result[i];
-        }
-    }
-    response->state = INITIAL;
-    return *response;
+    server_command response;
+    memset(&response, 0, sizeof(server_command));
+    response.state = INITIAL;
+    response.success = false;
+
+    parse_command(buf, &response);
+    return response;
 }
 
 bool get_long_command(char* buf, server_command *command) {
@@ -73,15 +62,43 @@ bool get_long_command(char* buf, server_command *command) {
     return false;
 }
 
-bool parse_command(char *input, char *command_type, int command_len, server_command* command) {
-    bool long_ending = false;
-    bool little_ending = false;
-    if ((command->text = strstr(input, command_type))) {
-        long_ending = command->text[command_len] == '\r' && command->text[command_len + 1] == '\n';
-        little_ending = command->text[command_len] == '\n';
-        command->command_length = (unsigned int) (long_ending ? command_len + 2 : little_ending ? command_len + 1 : 0);
+bool parse_command(char *input, server_command* command) {
+    for (int i = 0; i < COMMAND_COUNT; i++) {
+        command_holder com = command_info[i];
+
+        char* short_end = (char*) malloc(sizeof(char) * (com.length + 1));
+        char* long_end = (char*) malloc(sizeof(char) * (com.length + 2));
+        memset(short_end, 0, sizeof(short_end));
+        memset(long_end, 0, sizeof(long_end));
+
+        short_end = strcat(short_end, com.name);
+        long_end = strcat(long_end, com.name);
+
+        if (com.simple) {
+            short_end = strcat(short_end, COMMAND_END_1);
+            long_end = strcat(long_end, COMMAND_END_2);
+        }
+
+        command->type = com.type;
+        command->simple = com.simple;
+        if (strstr(input, short_end) == input) {
+            command->success = true;
+            command->text = strstr(input, short_end);
+            command->command_length = (size_t) (command->simple ? com.length + 1 : com.length);
+            free(long_end);
+            return true;
+        } else if (strstr(input, long_end) == input) {
+            command->success = true;
+            command->text = strstr(input, long_end);
+            command->command_length = (size_t) (command->simple ? com.length + 2 : com.length);
+            free(short_end);
+            return true;
+        } else {
+            free(short_end);
+            free(long_end);
+        }
     }
-    return (command->text && (long_ending || little_ending));
+    return false;
 }
 
 command_response process_command(server_command command) {
@@ -130,10 +147,20 @@ command_response process_command(server_command command) {
     return result;
 }
 
-bool startsWith(const char *pre, const char *str) {
-    size_t lenpre = strlen(pre),
-    lenstr = strlen(str);
-    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
+size_t find_line_ending(char *buf) {
+    int ending_len = 0;
+    char* start = strstr(buf, COMMAND_END_2); {
+        ending_len = 2;
+        if (NULL == start) {
+            ending_len = 1;
+            start = strstr(buf, COMMAND_END_1);
+        }
+    }
+    if (NULL != start) {
+        return start - buf + ending_len;
+    } else {
+        return 0;
+    }
 }
 
 void get_current_time(command_response* result) {
