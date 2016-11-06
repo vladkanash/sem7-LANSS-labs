@@ -13,8 +13,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "server/server.h"
 #include "system_dependent_code.h"
+#include "server/server.h"
 
 int main(int argc, char *argv[]){
 	int portno;
@@ -33,8 +33,8 @@ int main(int argc, char *argv[]){
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons((uint16_t) portno);
 
-	//printf("My process ID : %d\n", getpid());
-    printf("My process ID : %d\n", _getpid());
+	  printf("My process ID : %d\n", getpid());
+    //printf("My process ID : %d\n", _getpid());
     printf("Listening to port : %d\n", portno);
 	
     run_server(&serv_addr);

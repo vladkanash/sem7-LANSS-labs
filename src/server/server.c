@@ -9,10 +9,11 @@
 
 #include <unistd.h>
 #include <stdbool.h>
-#include "server.h"
-#include "engine.h"
+
 #include "../constants.h"
 #include "../system_dependent_code.h"
+#include "server.h"
+#include "engine.h"
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
@@ -75,7 +76,8 @@ void start_file_upload(int fd) {
     int offset;
     //ssize_t sent_bytes;
     //__off_t remain_data;
-	_off_t remain_data;
+	//_off_t remain_data;
+    long int remain_data;
 
 	struct stat file_stat;
     static char out_buf[BUF_SIZE];

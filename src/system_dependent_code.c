@@ -42,21 +42,21 @@ int quit_socket(){
   #endif
 }
 
-int close_socket(SOCKET sock){
+int close_socket(int socket){
   int status = 0;
 
   #ifdef _WIN32
-    status = shutdown(sock, SD_BOTH);
-    if (status == 0) { status = closesocket(sock); }
+    status = shutdown(socket, SD_BOTH);
+    if (status == 0) { status = closesocket(socket); }
   #else
-    status = shutdown(sock, SHUT_RDWR);
-    if (status == 0) { status = close(sock); }
+    status = shutdown(socket, SHUT_RDWR);
+    if (status == 0) { status = close(socket); }
   #endif
 
   return status;
 }
 
-int send_data(SOCKET soket, const char *buffer, int length, int flags){
+int send_data(int soket, const char *buffer, int length, int flags){
     #ifdef _WIN32
         return send(soket, buffer, length, flags);
     #else

@@ -1,8 +1,6 @@
 #ifndef SYSTEM_DEPENDENT_CODE_H
 #define SYSTEM_DEPENDENT_CODE_H
 
-#include <stdio.h>
-
 #ifdef _WIN32
 	#include <winsock2.h>
 	#include <process.h>
@@ -12,9 +10,11 @@
 	#include <netinet/in.h>
 #endif
 
+#include <stdio.h>
+
 int initialize_socket();
-int send_data(SOCKET soket, const char *buffer, int length, int flags);
-int close_socket(SOCKET socket);
+int send_data(int soket, const char *buffer, int length, int flags);
+int close_socket(int socket);
 int quit_socket();
 
 #endif //SYSTEM_DEPENDENT_CODE_H
