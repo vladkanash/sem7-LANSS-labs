@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 
+int get_process_id();
 int initialize_socket();
 int send_data(int soket, const char *buffer, int length, int flags);
 int close_socket(int socket);

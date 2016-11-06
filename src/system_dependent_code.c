@@ -1,5 +1,13 @@
 #include "system_dependent_code.h"
 
+int get_process_id(){
+  #ifdef _WIN32
+    return _getpid();
+  #else
+    return getpid();
+  #endif
+}
+
 int winsock_version(){
 	 return (int)0x0202; // equal to windows macros MAKEWORD(2,2);
 }

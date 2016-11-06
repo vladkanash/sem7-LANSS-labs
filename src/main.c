@@ -32,9 +32,7 @@ int main(int argc, char *argv[]){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons((uint16_t) portno);
-
-	  printf("My process ID : %d\n", getpid());
-    //printf("My process ID : %d\n", _getpid());
+    printf("My process ID : %d\n", get_process_id());
     printf("Listening to port : %d\n", portno);
 	
     run_server(&serv_addr);
