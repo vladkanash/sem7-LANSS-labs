@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "system_dependent_code.h"
-#include "server/server.h"
+#include "server.h"
 
 int main(int argc, char *argv[]){
 	int portno;
