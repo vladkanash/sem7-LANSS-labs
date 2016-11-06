@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "system_dependent_code.h"
-#include "server/server.h"
+#include "src/system_dependent_code.h"
+#include "src/server/server.h"
 
 int main(int argc, char *argv[]){
 	int portno;

@@ -1,18 +1,15 @@
 cmake_minimum_required(VERSION 3.5)
 project(LANSS)
 
+enable_testing()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c11")
 
-add_executable(server src/server/server.c
-        src/main.c
-        src/server/server.h
-        src/constants.h
-        src/types.h
-        src/server/engine.h
-        src/server/engine.c
-        src/system_dependent_code.h
-        src/system_dependent_code.c)
+include_directories(src)
 
-add_executable(client src/client.c src/types.h)
+add_subdirectory(test)
+add_subdirectory(src)
+
+add_executable(server main.c)
+target_link_libraries(server lanss)
 
 
