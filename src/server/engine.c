@@ -9,7 +9,7 @@
 #include <stdbool.h>
 
 #include "engine.h"
-#include "../constants.h"-
+#include "../constants.h"
 
 static command_holder command_info[COMMAND_COUNT];
 
