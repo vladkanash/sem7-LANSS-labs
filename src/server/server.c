@@ -191,6 +191,8 @@ void parse_command_end(int fd) {
 
 void close_connection(int fd) {    
     FD_CLR(fd, &read_set);
-    fd == fd_hwm && fd_hwm--;
+    if (fd == fd_hwm) {
+        fd_hwm--;
+    }
     close_socket(fd);
 }

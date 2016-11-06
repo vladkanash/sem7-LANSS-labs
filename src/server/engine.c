@@ -11,13 +11,6 @@
 #include "engine.h"
 #include "../constants.h"
 
-void cleanup(char *in_buf, char *out_buf, server_command *command, command_response *response) {
-    memset(out_buf, 0, BUF_SIZE);
-    memset(in_buf, 0, BUF_SIZE);
-    memset(command, 0, sizeof(server_command));
-    memset(response, 0, sizeof(command_response));
-}
-
 bool parse_long_command(char *input, char *command_type, int command_len, server_command* command) {
     if ((command->text = strstr(input, command_type))) {
         command->command_length = (size_t) command_len;

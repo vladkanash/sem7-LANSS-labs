@@ -12,6 +12,7 @@ int winsock_version(){
 	 return (int)0x0202; // equal to windows macros MAKEWORD(2,2);
 }
 
+#ifdef _WIN32
 int initialize_windows_socket(int (*version)()){
 	WSADATA wsa;
 	int fd_skt;
@@ -27,9 +28,10 @@ int initialize_windows_socket(int (*version)()){
 
 	return fd_skt;
 }
+#endif
 
 int initialize_unix_socket(){
-	return (int)socket(AF_INET, SOCK_STREAM, 0);
+	return socket(AF_INET, SOCK_STREAM, 0);
 }
 
 
@@ -38,7 +40,7 @@ int initialize_socket(){
 	#ifdef _WIN32
 		return initialize_windows_socket(winsock_version);
 	#else
-		return initialize_unix_socket
+		return initialize_unix_socket();
 	#endif
 }
 
@@ -64,10 +66,10 @@ int close_socket(int socket){
   return status;
 }
 
-int send_data(int soket, const char *buffer, int length, int flags){
+int send_data(int socket, const char *buffer, int length, int flags){
     #ifdef _WIN32
-        return send(soket, buffer, length, flags);
+        return send(socket, buffer, length, flags);
     #else
-        return write(soket, buffer, length);
+        return (int) write(socket, buffer, (size_t) length);
     #endif
 }
