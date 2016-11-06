@@ -16,3 +16,6 @@ set(SOURCE_FILES
         )
 
 add_library(lanss STATIC ${SOURCE_FILES} ${HEADER_FILES})
+
+add_executable(server server/main.c)
+target_link_libraries(server lanss)
