@@ -12,4 +12,4 @@ if [ ! -d "build/" ]; then
   ./build.sh
 fi
 
-build/server $1
+../build/bin/server $1
