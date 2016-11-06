@@ -1,25 +1,18 @@
 //
 // Created by vladkanash on 7.10.16.
 //
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-//#include <sys/socket.h>
-//#include <sys/sendfile.h>
-//#include <netinet/in.h>
-#include "stdbool.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <unistd.h>
+#include <stdbool.h>
 #include "server.h"
 #include "engine.h"
 #include "../constants.h"
-
-// WINDOWS LIBS 
-#include <winsock2.h>
-#include <process.h>
+#include "../system_dependent_code.h"
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
@@ -29,14 +22,7 @@ void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
     fd_set read_buf, write_buf;
 
-    //fd_skt = socket(AF_INET, SOCK_STREAM, 0);
-
-    //Create a socket
-    if((fd_skt = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET) {
-        printf("Could not create socket : %d" , WSAGetLastError());
-    }
- 
-    printf("Socket created.\n");
+	fd_skt = initialize_socket();
 
     if (bind(fd_skt, (struct sockaddr*) sap, sizeof(*sap)) < 0) {
         perror("error while binding socket");
@@ -70,8 +56,8 @@ void run_server(struct sockaddr_in *sap) {
             }
         }
     }
-	//
-    closesocket(fd_skt);
+    close_socket(fd_skt);
+    quit_socket();
     return;
 }
 
@@ -89,15 +75,15 @@ void start_file_upload(int fd) {
     int offset;
     //ssize_t sent_bytes;
     //__off_t remain_data;
-	  _off_t remain_data;
+	_off_t remain_data;
 
-	  struct stat file_stat;
+	struct stat file_stat;
     static char out_buf[BUF_SIZE];
 
     int file = open(file_path, O_RDONLY);
 	  if (file == -1) {
         perror("Can't open file");
-		    memset(out_buf, 0, BUF_SIZE);
+		memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "Cannot find file on server: %s ", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -105,7 +91,7 @@ void start_file_upload(int fd) {
     }
     if (fstat(file, &file_stat) < 0) {
         perror("fstat error");
-		    memset(out_buf, 0, BUF_SIZE);
+		memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "There was an error opening file %s", file_path);
         write(fd, out_buf, BUF_SIZE);
         command_list[fd].state = INITIAL;
@@ -115,7 +101,7 @@ void start_file_upload(int fd) {
 
     offset = 0;
     remain_data = file_stat.st_size;
-    //while ((sent_bytes = sendfile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
+    //while ((sent_bytes = send_datafile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
     /*while ((sent_bytes = TransmitFile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
         fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
         sent_bytes, offset, remain_data);
@@ -165,9 +151,8 @@ void parse_command_start(int fd) {
                 recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove first part of long command
                 break;
             }
-            //write(fd, response.text, response.text_length);
-			      send(fd, response.text, response.text_length, 0);
-			      free(response.text);
+			send_data(fd, response.text, response.text_length, 0);
+			free(response.text);
         } else if (nread > COMMAND_MAX_LENGTH) {
             recv(fd, in_buf, (size_t) (nread - COMMAND_MAX_LENGTH), 0); //remove garbage text with no commands found
         }
@@ -191,10 +176,9 @@ void parse_command_end(int fd) {
             recv(fd, buf, command.command_length, 0); //remove text part of long command
             command.state = response.next_state;
             command_list[fd] = command;
-            //write(fd, response.text, response.text_length);
-			      send(fd, response.text, response.text_length, 0);
+			send_data(fd, response.text, response.text_length, 0);
             FD_SET(fd, &write_set);
-			      free(response.text);
+			free(response.text);
         } else {
             read_size *= 2;
             buf = (char*)realloc(buf, sizeof(char) * read_size);
@@ -203,11 +187,8 @@ void parse_command_end(int fd) {
     free(buf);
 }
 
-void close_connection(int fd) {
+void close_connection(int fd) {    
     FD_CLR(fd, &read_set);
-    if (fd == fd_hwm) {
-        fd_hwm--;
-    }
-	  //
-    closesocket(fd);
+    fd == fd_hwm && fd_hwm--;
+    close_socket(fd);
 }
