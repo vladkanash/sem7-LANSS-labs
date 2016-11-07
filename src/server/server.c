@@ -146,6 +146,7 @@ void parse_command_start(int fd) {
             if (command.simple) {
                 response = process_command(command);
                 if (response.type == CLOSE) {
+                    send_data(fd, response.text, response.text_length, 0);
                     close_connection(fd);
                 }
                 recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove simple command

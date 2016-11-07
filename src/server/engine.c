@@ -66,8 +66,8 @@ bool parse_command(char *input, server_command* command) {
     for (int i = 0; i < COMMAND_COUNT; i++) {
         command_holder com = command_info[i];
 
-        char* short_end = (char*) malloc(sizeof(char) * (com.length + 1));
-        char* long_end = (char*) malloc(sizeof(char) * (com.length + 2));
+        char* short_end = (char*) malloc( sizeof(char) * (com.length + 1));
+        char* long_end = (char*) malloc( sizeof(char) * (com.length + 2));
         memset(short_end, 0, sizeof(short_end));
         memset(long_end, 0, sizeof(long_end));
 
@@ -85,17 +85,12 @@ bool parse_command(char *input, server_command* command) {
             command->success = true;
             command->text = strstr(input, short_end);
             command->command_length = (size_t) (command->simple ? com.length + 1 : com.length);
-            free(long_end);
             return true;
         } else if (strstr(input, long_end) == input) {
             command->success = true;
             command->text = strstr(input, long_end);
             command->command_length = (size_t) (command->simple ? com.length + 2 : com.length);
-            free(short_end);
             return true;
-        } else {
-            free(short_end);
-            free(long_end);
         }
     }
     return false;
@@ -116,7 +111,8 @@ command_response process_command(server_command command) {
         }
         case CLOSE : {
             result.type = command.type;
-            result.text = (char*)malloc(23 * sizeof(char));
+            result.text = (char*)malloc(24 * sizeof(char));
+            result.text_length = 24;
             sprintf(result.text, "Closing connection...\r\n");
             result.success = true;
             break;
