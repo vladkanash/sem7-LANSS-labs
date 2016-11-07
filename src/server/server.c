@@ -22,8 +22,10 @@ server_command command_list[MAX_CLIENTS];
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
     fd_set read_buf, write_buf;
+    struct timeval timeout_buf;
 
     init_commands();
+    init_stop_handler();
 	fd_skt = initialize_socket();
 
     if (bind(fd_skt, (struct sockaddr*) sap, sizeof(*sap)) < 0) {
@@ -39,6 +41,9 @@ void run_server(struct sockaddr_in *sap) {
     if (fd_skt > fd_hwm) {
         fd_hwm = fd_skt;
     }
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100;
 
     FD_ZERO(&read_set);
     FD_SET(fd_skt, &read_set);
@@ -47,7 +52,8 @@ void run_server(struct sockaddr_in *sap) {
     while (running) {
         read_buf = read_set;
         write_buf = write_set;
-        select(fd_hwm + 1, &read_buf, &write_buf, 0, 0);
+        timeout_buf = timeout;
+        select(fd_hwm + 1, &read_buf, &write_buf, 0, &timeout_buf);
         for (fd = 0; fd <= fd_hwm; fd++) {
             if (FD_ISSET(fd, &read_buf) || FD_ISSET(fd, &write_buf)) {
                 if (fd == fd_skt) {
@@ -101,6 +107,7 @@ void start_file_upload(int fd) {
         return;
     }
     fprintf(stdout, "File size = %li bytes", file_stat.st_size);
+    FD_SET(fd, &write_set);
 
     offset = 0;
     remain_data = file_stat.st_size;
@@ -182,7 +189,6 @@ void parse_command_end(int fd) {
             command.state = response.next_state;
             command_list[fd] = command;
 			send_data(fd, response.text, response.text_length, 0);
-            FD_SET(fd, &write_set);
 			free(response.text);
         } else {
             read_size *= 2;
@@ -198,4 +204,14 @@ void close_connection(int fd) {
         fd_hwm--;
     }
     close_socket(fd);
+}
+
+void stop_server() {
+    for (int fd = 0; fd <= fd_hwm; fd++) {
+        if (FD_ISSET(fd, &read_set) || FD_ISSET(fd, &write_set)) {
+            close_socket(fd);
+        }
+        quit_socket();
+    }
+    exit(0);
 }

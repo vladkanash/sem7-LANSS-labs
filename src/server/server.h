@@ -16,4 +16,6 @@ void parse_command_end(int fd);
 
 void parse_command_start(int fd);
 
+void stop_server();
+
 #endif //LANSS_SERVER_H

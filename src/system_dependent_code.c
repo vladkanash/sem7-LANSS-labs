@@ -1,3 +1,4 @@
+#include <memory.h>
 #include "system_dependent_code.h"
 
 int get_process_id(){
@@ -66,10 +67,30 @@ int close_socket(int socket){
   return status;
 }
 
-int send_data(int socket, const char *buffer, int length, int flags){
+int send_data(int socket, const char *buffer, int length, int flags) {
     #ifdef _WIN32
         return send(socket, buffer, length, flags);
     #else
         return (int) write(socket, buffer, (size_t) length);
     #endif
 }
+
+#ifndef _WIN32
+void sighandler(int signum, siginfo_t *info, void *ptr) {
+    printf("Received signal %d\n", signum);
+    stop_server();
+}
+#endif
+
+void init_stop_handler() {
+#ifdef _WIN32
+    retutrn;
+#else
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = sighandler;
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGINT, &act, NULL);
+#endif
+}
+
