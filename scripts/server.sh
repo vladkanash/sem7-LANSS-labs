@@ -8,7 +8,7 @@ if [ $# -eq 0 ]
 fi
 
 #if cannot find build directory, run build process
-if [ ! -d "build/" ]; then
+if [ ! -d "../build/" ]; then
   ./build.sh
 fi
 
