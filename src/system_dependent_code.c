@@ -84,7 +84,7 @@ void sighandler(int signum, siginfo_t *info, void *ptr) {
 
 void init_stop_handler() {
 #ifdef _WIN32
-    retutrn;
+    return;
 #else
     struct sigaction act;
     memset(&act, 0, sizeof(act));
