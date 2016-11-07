@@ -62,36 +62,33 @@ bool get_long_command(char* buf, server_command *command) {
     return false;
 }
 
+bool string_contain_end_line_symb(char* string){
+    return string[strlen(string)-1] == '\n';
+}
+
+bool string_contain_end_line_and_return_symb(char* string){
+    return string_contain_end_line_symb(string) && string[strlen(string)-2] == '\r';
+}
+
+bool is_command_name(char* input, char* command_name){
+   return strstr(input, command_name) == input && 
+        ( (strlen(input) <= strlen(command_name) + 1 && string_contain_end_line_symb(input)) ||
+         (strlen(input) <= strlen(command_name) + 2 && string_contain_end_line_and_return_symb(input)) );
+}
+
 bool parse_command(char *input, server_command* command) {
     for (int i = 0; i < COMMAND_COUNT; i++) {
         command_holder com = command_info[i];
-
-        char* short_end = (char*) malloc( sizeof(char) * (com.length + 1));
-        char* long_end = (char*) malloc( sizeof(char) * (com.length + 2));
-        memset(short_end, 0, sizeof(short_end));
-        memset(long_end, 0, sizeof(long_end));
-
-        short_end = strcat(short_end, com.name);
-        long_end = strcat(long_end, com.name);
-
-        if (com.simple) {
-            short_end = strcat(short_end, COMMAND_END_1);
-            long_end = strcat(long_end, COMMAND_END_2);
-        }
-
         command->type = com.type;
         command->simple = com.simple;
-        if (strstr(input, short_end) == input) {
+        
+        if (is_command_name(input, com.name)){
             command->success = true;
-            command->text = strstr(input, short_end);
+            command->text = com.name;
             command->command_length = (size_t) (command->simple ? com.length + 1 : com.length);
             return true;
-        } else if (strstr(input, long_end) == input) {
-            command->success = true;
-            command->text = strstr(input, long_end);
-            command->command_length = (size_t) (command->simple ? com.length + 2 : com.length);
-            return true;
         }
+
     }
     return false;
 }

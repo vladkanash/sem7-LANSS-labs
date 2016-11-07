@@ -150,11 +150,10 @@ void parse_command_start(int fd) {
                     send_data(fd, response.text, response.text_length, 0);
                     close_connection(fd);
                 }
-                recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove simple command
+                recv(fd, in_buf, command.command_length, 0); //remove simple command
             } else {
                 command_list[fd].state = PARSING;
-                recv(fd, in_buf, command.text + command.command_length - in_buf, 0); //remove first part of long command
-                break;
+                recv(fd, in_buf, command.command_length, 0); //remove first part of long command
             }
 			send_data(fd, response.text, response.text_length, 0);
 			free(response.text);
