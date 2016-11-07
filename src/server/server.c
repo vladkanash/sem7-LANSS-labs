@@ -50,11 +50,7 @@ void run_server(struct sockaddr_in *sap) {
         select(fd_hwm + 1, &read_buf, &write_buf, 0, 0);
         for (fd = 0; fd <= fd_hwm; fd++) {
             if (FD_ISSET(fd, &read_buf) || FD_ISSET(fd, &write_buf)) {
-                if (fd == fd_skt) {
-                    add_client(fd);
-                } else {
-                    input_data(fd);
-                }
+                fd == fd_skt ? add_client(fd) : input_data(fd);
             }
         }
     }
@@ -66,9 +62,7 @@ void run_server(struct sockaddr_in *sap) {
 void add_client(int fd) {
     int fd_client = accept(fd, 0, 0);
     FD_SET(fd_client, &read_set);
-    if (fd_client > fd_hwm) {
-        fd_hwm = fd_client;
-    }
+    fd_client > fd_hwm && (fd_hwm = fd_client);
 }
 
 void start_file_upload(int fd) {
