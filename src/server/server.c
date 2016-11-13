@@ -17,7 +17,7 @@
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
-server_command command_list[MAX_CLIENTS];
+client_session command_list[MAX_CLIENTS];
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -72,7 +72,7 @@ void add_client(int fd) {
 }
 
 void start_file_upload(int fd) {
-    server_command command = command_list[fd];
+    client_session command = command_list[fd];
     char* file_path = command.text;
     int offset;
     //ssize_t sent_bytes;
@@ -136,7 +136,7 @@ void parse_command_start(int fd) {
     static char out_buf[BUF_SIZE];
     memset(in_buf, 0, sizeof(in_buf));
     memset(out_buf, 0, sizeof(out_buf));
-    server_command command;
+    client_session command;
     command_response response;
     ssize_t nread = 0;
     do {
@@ -166,7 +166,7 @@ void parse_command_start(int fd) {
 }
 
 void parse_command_end(int fd) {
-    server_command command;
+    client_session command;
     command_response response;
     ssize_t nread;
     size_t old_size, read_size = BUF_SIZE;

@@ -35,9 +35,9 @@ void init_commands() {
     command_info[3].name = COMMAND_CLOSE;
 }
 
-server_command get_command(char *buf) {
-    server_command response;
-    memset(&response, 0, sizeof(server_command));
+client_session get_command(char *buf) {
+    client_session response;
+    memset(&response, 0, sizeof(client_session));
     response.state = INITIAL;
     response.success = false;
 
@@ -45,7 +45,7 @@ server_command get_command(char *buf) {
     return response;
 }
 
-bool get_long_command(char* buf, server_command *command) {
+bool get_long_command(char* buf, client_session *command) {
     int end_length = 2;
     char* start = strstr(buf, COMMAND_END_2);
     if (NULL == start) {
@@ -62,7 +62,7 @@ bool get_long_command(char* buf, server_command *command) {
     return false;
 }
 
-bool parse_command(char *input, server_command* command) {
+bool parse_command(char *input, client_session* command) {
     for (int i = 0; i < COMMAND_COUNT; i++) {
         command_holder com = command_info[i];
 
@@ -96,7 +96,7 @@ bool parse_command(char *input, server_command* command) {
     return false;
 }
 
-command_response process_command(server_command command) {
+command_response process_command(client_session command) {
     command_response result;
     memset(&result, 0, sizeof(result));
     result.next_state = INITIAL;

@@ -7,13 +7,13 @@ void init_commands();
 
 void get_current_time(command_response* result);
 
-command_response process_command(server_command command);
+command_response process_command(client_session command);
 
-bool parse_command(char *input, server_command* command);
+bool parse_command(char *input, client_session* command);
 
-server_command get_command(char *buf);
+client_session get_command(char *buf);
 
-bool get_long_command(char* buf, server_command *command);
+bool get_long_command(char* buf, client_session *command);
 
 size_t find_line_ending(char *buf);
 

@@ -13,3 +13,6 @@
 #define COMMAND_END_2 "\r\n"
 
 #define CHUNK_SIZE 512
+
+#define URANDOM_PATH "/dev/urandom"
+#define UUID_LENGTH 16

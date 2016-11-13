@@ -94,3 +94,15 @@ void init_stop_handler() {
 #endif
 }
 
+void get_uuid(char* uuid) {
+#ifdef _WIN32
+    retutrn;
+#else
+    int file = open(URANDOM_PATH, O_RDONLY);
+    if (file != -1) {
+        read(file, uuid, UUID_LENGTH);
+    }
+#endif
+}
+
+

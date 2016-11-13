@@ -6,19 +6,22 @@
 #define LANSS_TYPES_H
 
 #include <stdbool.h>
+#include <wchar.h>
+#include "constants.h"
 
 typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD, KILL} commands;
 
 typedef enum server_state {INITIAL, UPLOADING, PARSING} server_state;
 
-typedef struct server_command {
+typedef struct client_session {
     char* text;
+    char uuid[UUID_LENGTH];
     bool simple;
-	  bool success;
-	  commands type;
-	  size_t command_length;
-	  server_state state;
-} server_command;
+    bool success;
+    commands type;
+    size_t command_length;
+    server_state state;
+} client_session;
 
 typedef struct command_response {
     char* text;
