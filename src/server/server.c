@@ -154,6 +154,7 @@ void parse_command_start(int fd) {
             } else {
                 command_list[fd].state = PARSING;
                 recv(fd, in_buf, command.command_length, 0); //remove first part of long command
+                break;
             }
 			send_data(fd, response.text, response.text_length, 0);
 			free(response.text);
