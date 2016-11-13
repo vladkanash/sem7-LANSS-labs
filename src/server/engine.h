@@ -17,4 +17,6 @@ bool get_long_command(char* buf, client_session *command);
 
 size_t find_line_ending(char *buf);
 
+void check_download_arguments(client_session *session);
+
 #endif //LANSS_ENGINE_H

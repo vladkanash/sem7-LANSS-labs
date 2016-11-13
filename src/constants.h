@@ -11,6 +11,7 @@
 
 #define COMMAND_END_1 "\n"
 #define COMMAND_END_2 "\r\n"
+#define ARGS_DELIMITER " "
 
 #define CHUNK_SIZE 512
 

@@ -17,6 +17,9 @@
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
+
+void check_download_arguments(client_session *session);
+
 client_session command_list[MAX_CLIENTS];
 
 void run_server(struct sockaddr_in *sap) {
@@ -166,22 +169,23 @@ void parse_command_start(int fd) {
 }
 
 void parse_command_end(int fd) {
-    client_session command;
+    client_session session;
     command_response response;
     ssize_t nread;
     size_t old_size, read_size = BUF_SIZE;
     char* buf = (char*)malloc(sizeof(char) * read_size);
-    command = command_list[fd];
+    session = command_list[fd];
 
     do {
         old_size = read_size;
         nread = recv(fd, buf, read_size, MSG_PEEK);
 
-        if (get_long_command(buf, &command)) {
-            response = process_command(command);
-            recv(fd, buf, command.command_length, 0); //remove text part of long command
-            command.state = response.next_state;
-            command_list[fd] = command;
+        if (get_long_command(buf, &session)) {
+            check_download_arguments(&session);
+            response = process_command(session);
+            recv(fd, buf, session.command_length, 0); //remove text part of long session
+            session.state = response.next_state;
+            command_list[fd] = session;
 			send_data(fd, response.text, response.text_length, 0);
 			free(response.text);
         } else {

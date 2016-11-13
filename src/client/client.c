@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 void parse_client_command(char *input) {
 
     if (input == strstr(input, COMMAND_DOWNLOAD)) {
-        strcat(input, " ");
+        strcat(input, ARGS_DELIMITER);
         strcat(input, uuid);
     }
     strcat(input, COMMAND_END_1);

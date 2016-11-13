@@ -159,6 +159,19 @@ size_t find_line_ending(char *buf) {
     }
 }
 
+void check_download_arguments(client_session *session) {
+    char* uuid_start = session->text;
+    if (session->type == DOWNLOAD) {
+        char* delimiter = strstr(session->text, ARGS_DELIMITER);
+        if (delimiter) {
+            uuid_start = delimiter + 1;
+            *delimiter = '\0';
+            session->command_length = delimiter - session->text;
+        }
+        strncpy(session->uuid, uuid_start, UUID_LENGTH);
+    }
+}
+
 void get_current_time(command_response* result) {
     unsigned size = 30;
     struct tm *tm;
