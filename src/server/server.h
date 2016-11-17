@@ -16,6 +16,10 @@ void parse_command_end(int fd);
 
 void parse_command_start(int fd);
 
+void start_file_upload(int fd);
+
+void upload_file_part(int fd);
+
 void stop_server();
 
 #endif //LANSS_SERVER_H

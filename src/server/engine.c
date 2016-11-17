@@ -131,7 +131,7 @@ command_response process_command(client_session command) {
             result.text_length = (unsigned int) command.command_length + 28;
             result.text = (char*)malloc((command.command_length + 28) * sizeof(char));
             sprintf(result.text, "Request to download file: %s\r\n", command.text);
-            result.next_state = UPLOADING;
+            result.next_state = START_UPLOADING;
             result.success = true;
             break;
         }

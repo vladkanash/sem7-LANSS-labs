@@ -3,6 +3,7 @@ project(LANSS)
 set(HEADER_FILES
         server/server.h
         server/engine.h
+        server/download_list.h
         system_dependent_code.h
         constants.h
         types.h
@@ -11,6 +12,7 @@ set(HEADER_FILES
 set(SOURCE_FILES
         server/server.c
         server/engine.c
+        server/download_list.c
         system_dependent_code.c
         )
 

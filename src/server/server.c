@@ -14,13 +14,12 @@
 #include "../system_dependent_code.h"
 #include "server.h"
 #include "engine.h"
+#include "download_list.h"
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
 
-void check_download_arguments(client_session *session);
-
-client_session command_list[MAX_CLIENTS];
+client_session sessions[MAX_CLIENTS];
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -68,56 +67,8 @@ void run_server(struct sockaddr_in *sap) {
     return;
 }
 
-void add_client(int fd) {
-    int fd_client = accept(fd, 0, 0);
-    FD_SET(fd_client, &read_set);
-    fd_client > fd_hwm && (fd_hwm = fd_client);
-}
-
-void start_file_upload(int fd) {
-    client_session command = command_list[fd];
-    char* file_path = command.text;
-    int offset;
-    //ssize_t sent_bytes;
-    //__off_t remain_data;
-	//_off_t remain_data;
-    long int remain_data;
-
-	struct stat file_stat;
-    static char out_buf[BUF_SIZE];
-
-    int file = open(file_path, O_RDONLY);
-	  if (file == -1) {
-        perror("Can't open file");
-		memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "Cannot find file on server: %s ", file_path);
-        write(fd, out_buf, BUF_SIZE);
-        command_list[fd].state = INITIAL;
-        return;
-    }
-    if (fstat(file, &file_stat) < 0) {
-        perror("fstat error");
-		memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "There was an error opening file %s", file_path);
-        write(fd, out_buf, BUF_SIZE);
-        command_list[fd].state = INITIAL;
-        return;
-    }
-    fprintf(stdout, "File size = %li bytes", file_stat.st_size);
-    FD_SET(fd, &write_set);
-
-    offset = 0;
-    remain_data = file_stat.st_size;
-    //while ((sent_bytes = send_datafile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
-    /*while ((sent_bytes = TransmitFile(fd, file, (off_t *) &offset, BUF_SIZE)) > 0) {
-        fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
-        sent_bytes, offset, remain_data);
-        remain_data -= sent_bytes;
-    }*/
-}
-
 void input_data(int fd) {
-    server_state current_state = command_list[fd].state;
+    server_state current_state = sessions[fd].state;
     switch (current_state) {
         case INITIAL : {
             parse_command_start(fd);
@@ -127,11 +78,54 @@ void input_data(int fd) {
             parse_command_end(fd);
             break;
         }
-        case UPLOADING : {
+        case START_UPLOADING : {
             start_file_upload(fd);
             break;
         }
+        case UPLOADING : {
+            upload_file_part(fd);
+        }
     }
+}
+
+void add_client(int fd) {
+    int fd_client = accept(fd, 0, 0);
+    FD_SET(fd_client, &read_set);
+    fd_client > fd_hwm && (fd_hwm = fd_client);
+}
+
+void start_file_upload(int fd) {
+    client_session session = sessions[fd];
+    char* file_path = session.text;
+
+	struct stat file_stat;
+    static char out_buf[BUF_SIZE];
+
+    int file = open(file_path, O_RDONLY);
+    if (file == -1) {
+        perror("Can't open file");
+        memset(out_buf, 0, BUF_SIZE);
+        sprintf(out_buf, "Cannot find file on server: %s ", file_path);
+        write(fd, out_buf, BUF_SIZE);
+        sessions[fd].state = INITIAL;
+        return;
+    }
+    if (fstat(file, &file_stat) < 0) {
+        perror("fstat error");
+		memset(out_buf, 0, BUF_SIZE);
+        sprintf(out_buf, "There was an error opening file %s", file_path);
+        write(fd, out_buf, BUF_SIZE);
+        sessions[fd].state = INITIAL;
+        return;
+    }
+    fprintf(stdout, "File size = %li bytes", file_stat.st_size);
+    FD_SET(fd, &write_set);
+
+    add_download(session.uuid, file);
+    download_handler* download = get_download(session.uuid);
+    download -> size = file_stat.st_size;
+
+    upload_file_part(fd); //uploading first part of file.
 }
 
 void parse_command_start(int fd) {
@@ -146,7 +140,7 @@ void parse_command_start(int fd) {
         nread = recv(fd, in_buf, BUF_SIZE, MSG_PEEK);
         command = get_command(in_buf);
         if (command.success) {
-            command_list[fd] = command;
+            sessions[fd] = command;
             if (command.simple) {
                 response = process_command(command);
                 if (response.type == CLOSE) {
@@ -155,7 +149,7 @@ void parse_command_start(int fd) {
                 }
                 recv(fd, in_buf, command.command_length, 0); //remove simple command
             } else {
-                command_list[fd].state = PARSING;
+                sessions[fd].state = PARSING;
                 recv(fd, in_buf, command.command_length, 0); //remove first part of long command
                 break;
             }
@@ -174,7 +168,7 @@ void parse_command_end(int fd) {
     ssize_t nread;
     size_t old_size, read_size = BUF_SIZE;
     char* buf = (char*)malloc(sizeof(char) * read_size);
-    session = command_list[fd];
+    session = sessions[fd];
 
     do {
         old_size = read_size;
@@ -185,7 +179,7 @@ void parse_command_end(int fd) {
             response = process_command(session);
             recv(fd, buf, session.command_length, 0); //remove text part of long session
             session.state = response.next_state;
-            command_list[fd] = session;
+            sessions[fd] = session;
 			send_data(fd, response.text, response.text_length, 0);
 			free(response.text);
         } else {
@@ -194,6 +188,37 @@ void parse_command_end(int fd) {
         }
     } while (nread == old_size);
     free(buf);
+}
+
+void upload_file_part(int fd) {
+    client_session session = sessions[fd];
+
+    download_handler* download = get_download(session.uuid);
+    if (NULL == download) {
+        perror("ERROR: Can't find download with uuid specified.");
+        sessions[fd].state = INITIAL;
+        return;
+    }
+
+    int file = download->file;
+    off_t offset = download->offset;
+    size_t remain_data = download->size - download->offset;
+    size_t bytes_to_send = remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data;
+
+    ssize_t sent_bytes = sendfile(fd, file, &offset, (size_t) bytes_to_send);
+
+    fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
+            bytes_to_send, (int)offset, remain_data - sent_bytes);
+
+    if (sent_bytes == remain_data) {
+        FD_CLR(fd, &write_set);
+        sessions[fd].state = INITIAL;
+        remove_download(session.uuid);
+        close(file);
+    } else {
+        download -> offset += (size_t) sent_bytes;
+        sessions[fd].state = UPLOADING;
+    }
 }
 
 void close_connection(int fd) {    

@@ -11,11 +11,11 @@
 
 typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD, KILL} commands;
 
-typedef enum server_state {INITIAL, UPLOADING, PARSING} server_state;
+typedef enum server_state {INITIAL, START_UPLOADING, PARSING, UPLOADING} server_state;
 
 typedef struct client_session {
     char* text;
-    char uuid[UUID_LENGTH];
+    char uuid[UUID_LENGTH + 1];
     bool simple;
     bool success;
     commands type;
@@ -37,5 +37,13 @@ typedef struct command_holder {
 	bool simple;
 	commands type;
 } command_holder;
+
+typedef struct download_handler {
+    char uuid[UUID_LENGTH + 1];
+    char* path;
+    size_t offset;
+    int file;
+    long size;
+} download_handler;
 
 #endif //LANSS_TYPES_H
