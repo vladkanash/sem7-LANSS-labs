@@ -13,7 +13,7 @@ typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD, KILL} commands;
 
 typedef enum server_state {INITIAL, IDLE, START_UPLOADING, UPLOADING, ECHOING} server_state;
 
-typedef enum client_state {CLIENT_INITIAL, CLIENT_IDLE, CLIENT_DOWNLOADING} client_state;
+typedef enum client_state {CLIENT_IDLE, CLIENT_START_DOWNLOADING, CLIENT_DOWNLOADING } client_state;
 
 typedef struct server_command {
     char* text;
