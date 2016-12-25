@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
     char* address, input[512];
     ssize_t nread;
     fd_set set, buf_set;
+    client_state state = CLIENT_IDLE;
 
     struct timeval timeout, timeout_buf;
     timeout.tv_sec = 1;
@@ -42,26 +43,36 @@ int main(int argc, char** argv) {
     FD_SET(fd_skt, &set);
 
     bool running = true;
+
     while (running) {
-        memset(input, 0, sizeof(input));
+        switch(state) {
+            case CLIENT_IDLE : {
 
-        scanf("%s", input);
-        if (!strcmp(input, COMMAND_CLOSE)) {
-            break;
-        }
-        parse_client_command(input);
+                scanf("%s", input);
+                send_data(fd_skt, input, (int) strlen(input), 0);
+                memset(input, 0, sizeof(input));
 
-        send_data(fd_skt, input, (int) strlen(input), 0);
-        memset(input, 0, sizeof(input));
+                if (strstr(input, COMMAND_DOWNLOAD) != NULL) {
+                    state = CLIENT_DOWNLOADING;
+                    break;
+                }
 
-        timeout_buf = timeout;
-        buf_set = set;
-        select(fd_skt + 1, &buf_set, 0, 0, &timeout_buf);
-        if (FD_ISSET(fd_skt, &buf_set)) {
-            read(fd_skt, input, sizeof(input));
-            printf("%s\n", input);
-        } else {
-            printf("Connection is lost...");
+                timeout_buf = timeout;
+                buf_set = set;
+                select(fd_skt + 1, &buf_set, 0, 0, &timeout_buf);
+                if (FD_ISSET(fd_skt, &buf_set)) {
+                    read(fd_skt, input, sizeof(input));
+                    printf("%s\n", input);
+                } else {
+                    printf("Connection is lost...");
+                    close(fd_skt);
+                }
+                break;
+            }
+            case CLIENT_DOWNLOADING : {
+                break;
+            }
+            default: break;
         }
     }
 
@@ -72,6 +83,7 @@ int main(int argc, char** argv) {
 void parse_client_command(char *input) {
 
     if (input == strstr(input, COMMAND_DOWNLOAD)) {
+
         strcat(input, ARGS_DELIMITER);
         strcat(input, uuid);
     }
