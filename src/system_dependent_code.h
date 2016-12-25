@@ -19,7 +19,7 @@
 
 int get_process_id();
 int initialize_socket();
-int send_data(int socket, const char *buffer, int length, int flags);
+int send_data(int socket, const void *buffer, int length, int flags);
 int close_socket(int socket);
 int quit_socket();
 void init_stop_handler();

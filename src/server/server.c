@@ -9,17 +9,21 @@
 
 #include <unistd.h>
 #include <stdbool.h>
+#include <libgen.h>
 
 #include "../constants.h"
 #include "../system_dependent_code.h"
 #include "server.h"
 #include "engine.h"
 #include "download_list.h"
+#include "session_container.h"
 
 int fd_hwm = 0;
 fd_set read_set, write_set;
 
-client_session sessions[MAX_CLIENTS];
+void process_echo(session_handler* session) ;
+
+void get_file_path(const session_handler *session, char *file_path);
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -68,22 +72,27 @@ void run_server(struct sockaddr_in *sap) {
 }
 
 void input_data(int fd) {
-    server_state current_state = sessions[fd].state;
+    session_handler* session = get_session_by_fd(fd);
+    server_state current_state = session != NULL ? session->state : INITIAL;
     switch (current_state) {
         case INITIAL : {
-            parse_command_start(fd);
+            init_client_session(fd);
             break;
         }
-        case PARSING : {
-            parse_command_end(fd);
+        case IDLE : {
+            parse_command_start(session);
+            break;
+        }
+        case ECHOING : {
+            process_echo(session);
             break;
         }
         case START_UPLOADING : {
-            start_file_upload(fd);
+            start_file_upload(session);
             break;
         }
         case UPLOADING : {
-            upload_file_part(fd);
+            upload_file_part(session);
         }
     }
 }
@@ -94,12 +103,21 @@ void add_client(int fd) {
     fd_client > fd_hwm && (fd_hwm = fd_client);
 }
 
-void start_file_upload(int fd) {
-    client_session session = sessions[fd];
-    char* file_path = session.text;
-
-	struct stat file_stat;
+void start_file_upload(session_handler* session) {
+    struct stat file_stat;
     static char out_buf[BUF_SIZE];
+    static char file_path[BUF_SIZE];
+    static char* file_name;
+    static file_info info;
+    int fd = session->fd;
+
+    memset(file_path, 0, BUF_SIZE);
+    memset(&info, 0, sizeof(file_info));
+
+    get_file_path(session, file_path);
+
+    file_name = basename(file_path);
+    strcpy(info.name, file_name);
 
     int file = open(file_path, O_RDONLY);
     if (file == -1) {
@@ -107,7 +125,7 @@ void start_file_upload(int fd) {
         memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "Cannot find file on server: %s ", file_path);
         write(fd, out_buf, BUF_SIZE);
-        sessions[fd].state = INITIAL;
+        session->state = IDLE;
         return;
     }
     if (fstat(file, &file_stat) < 0) {
@@ -115,88 +133,108 @@ void start_file_upload(int fd) {
 		memset(out_buf, 0, BUF_SIZE);
         sprintf(out_buf, "There was an error opening file %s", file_path);
         write(fd, out_buf, BUF_SIZE);
-        sessions[fd].state = INITIAL;
+        session->state = IDLE;
         return;
     }
     fprintf(stdout, "File size = %li bytes", file_stat.st_size);
+    info.size = (size_t) file_stat.st_size;
     FD_SET(fd, &write_set);
 
-    add_download(session.uuid, file);
-    download_handler* download = get_download(session.uuid);
+    add_download(session->uuid, file);
+    download_handler* download = get_download(session->uuid);
     download -> size = file_stat.st_size;
+    session->download = download;
 
-    upload_file_part(fd); //uploading first part of file.
+    send_data(fd, &info, sizeof(file_info), NULL);
+    upload_file_part(session); //uploading first part of file.
 }
 
-void parse_command_start(int fd) {
+void get_file_path(const session_handler *session, char *file_path) {
+    int fd = session->fd;
+    recv(fd, file_path, BUF_SIZE, MSG_PEEK);
+    file_path[strlen(file_path) - 1] = '\0';
+
+    if (file_path[strlen(file_path) - 1] == '\r') {
+        file_path[strlen(file_path) - 1] = '\0';
+    }
+}
+
+void parse_command_start(session_handler* session) {
     static char in_buf[BUF_SIZE];
-    static char out_buf[BUF_SIZE];
+    static command_response response;
+    static int fd;
+
+    memset(&response, 0, sizeof(command_response));
     memset(in_buf, 0, sizeof(in_buf));
-    memset(out_buf, 0, sizeof(out_buf));
-    client_session command;
-    command_response response;
-    ssize_t nread = 0;
-    do {
-        nread = recv(fd, in_buf, BUF_SIZE, MSG_PEEK);
-        command = get_command(in_buf);
-        if (command.success) {
-            sessions[fd] = command;
-            if (command.simple) {
-                response = process_command(command);
-                if (response.type == CLOSE) {
-                    send_data(fd, response.text, response.text_length, 0);
-                    close_connection(fd);
-                }
-                recv(fd, in_buf, command.command_length, 0); //remove simple command
-            } else {
-                sessions[fd].state = PARSING;
-                recv(fd, in_buf, command.command_length, 0); //remove first part of long command
-                break;
-            }
-			send_data(fd, response.text, response.text_length, 0);
-			free(response.text);
-        } else {
-            size_t ndel = find_line_ending(in_buf);
-            recv(fd, in_buf, ndel, 0); //remove garbage text with no commands found
-        }
-    } while (nread == sizeof(in_buf));
+
+    server_command* com = &(session->command);
+    fd = session->fd;
+
+    recv(fd, in_buf, BUF_SIZE, MSG_PEEK);           // 0: read data from socket
+    *com = get_command(in_buf, 0);                             // 1: parse command from data
+    response = process_command(com);                        // 2: process command and generate response
+    session->state = response.next_state;                   // 3: update session state according to response
+    send_data(fd, response.text, response.text_length, 0);  // 4: send response data back to client
+    flush_socket(session);                                  // 5: remove processed data from socket
+
+    if (com->success == true && com->type == CLOSE) {
+        close_connection(fd);
+        return;
+    }
 }
 
-void parse_command_end(int fd) {
-    client_session session;
-    command_response response;
-    ssize_t nread;
-    size_t old_size, read_size = BUF_SIZE;
-    char* buf = (char*)malloc(sizeof(char) * read_size);
-    session = sessions[fd];
+void process_echo(session_handler* session) {
+    size_t command_end = 0;
+    int fd = session->fd;
+    static char buf[BUF_SIZE];
 
-    do {
-        old_size = read_size;
-        nread = recv(fd, buf, read_size, MSG_PEEK);
+    memset(buf, 0, sizeof(buf));
 
-        if (get_long_command(buf, &session)) {
-            check_download_arguments(&session);
-            response = process_command(session);
-            recv(fd, buf, session.command_length, 0); //remove text part of long session
-            session.state = response.next_state;
-            sessions[fd] = session;
-			send_data(fd, response.text, response.text_length, 0);
-			free(response.text);
-        } else {
-            read_size *= 2;
-            buf = (char*)realloc(buf, sizeof(char) * read_size);
-        }
-    } while (nread == old_size);
-    free(buf);
+    recv(fd, buf, BUF_SIZE, MSG_PEEK);           // 0: read data from socket
+    command_end = find_line_ending(buf, BUF_SIZE);
+
+    recv(fd, buf, command_end, 0);
+    send_data(fd, buf, (int) command_end, 0);
+    if (command_end < BUF_SIZE) {
+        session->state = IDLE;
+        return;
+    }
 }
 
-void upload_file_part(int fd) {
-    client_session session = sessions[fd];
+//void parse_command_end(session_handler* session) {
+//    command_response response;
+//    ssize_t nread;
+//    size_t old_size, read_size = BUF_SIZE;
+//    char* buf = (char*)malloc(sizeof(char) * read_size);
+//    int fd = session->fd;
+//    server_command* command = &(session->command);
+//
+//    do {
+//        old_size = read_size;
+//        nread = recv(fd, buf, read_size, MSG_PEEK);
+//
+//        if (get_long_command(buf, command)) {
+//            //check_download_arguments(command);
+//            response = process_command(command);
+//            recv(fd, buf, command->command_length, 0); //remove text part of long session_handler
+//            command->state = response.next_state;
+//			send_data(fd, response.text, response.text_length, 0);
+//			free(response.text);
+//        } else {
+//            read_size *= 2;
+//            buf = (char*)realloc(buf, sizeof(char) * read_size);
+//        }
+//    } while (nread == old_size);
+//    free(buf);
+//}
 
-    download_handler* download = get_download(session.uuid);
+void upload_file_part(session_handler* session) {
+    download_handler* download = session->download;
+    int fd = session->fd;
+
     if (NULL == download) {
         perror("ERROR: Can't find download with uuid specified.");
-        sessions[fd].state = INITIAL;
+        session->state = IDLE;
         return;
     }
 
@@ -212,16 +250,45 @@ void upload_file_part(int fd) {
 
     if (sent_bytes == remain_data) {
         FD_CLR(fd, &write_set);
-        sessions[fd].state = INITIAL;
-        remove_download(session.uuid);
+        session->state = IDLE;
+        remove_download(session->uuid);
         close(file);
     } else {
         download -> offset += (size_t) sent_bytes;
-        sessions[fd].state = UPLOADING;
+        session->state = UPLOADING;
     }
 }
 
-void close_connection(int fd) {    
+void init_client_session(int fd) {
+    static char uuid[UUID_LENGTH];
+    memset(uuid, 0, UUID_LENGTH);
+    recv(fd, uuid, UUID_LENGTH, NULL);
+
+    session_handler* session = get_session(uuid);
+    if (session != NULL) {
+        session->fd = fd;
+        return;
+    }
+
+    session_handler new_session;
+    new_session.fd = fd;
+    new_session.state = IDLE;
+    memcpy(new_session.uuid, "0000000000000000", UUID_LENGTH);
+    put_session(&new_session);
+}
+
+void flush_socket(session_handler* session) {
+    static char buf[BUF_SIZE];
+    size_t size = session->command.command_length;
+
+    ssize_t nread = 0;
+    do {
+        size -= nread;
+        nread = recv(session->fd, buf, size, 0);
+    } while (size != nread);
+}
+
+void close_connection(int fd) {
     FD_CLR(fd, &read_set);
     if (fd == fd_hwm) {
         fd_hwm--;

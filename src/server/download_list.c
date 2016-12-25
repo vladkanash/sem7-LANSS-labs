@@ -13,7 +13,7 @@ void add_download(char *uuid, int file) {
 
     download_handler handler;
     handler.file = file;
-    strncpy(handler.uuid, uuid, UUID_LENGTH + 1);
+    strncpy(handler.uuid, uuid, UUID_LENGTH);
     handler.offset = 0;
 
     list[max_idx] = handler;
@@ -22,7 +22,7 @@ void add_download(char *uuid, int file) {
 
 bool download_exists(char *uuid) {
     for (int i = 0; i < max_idx; i++) {
-        if (!strcmp(list[i].uuid, uuid)) {
+        if (!strncmp(list[i].uuid, uuid, UUID_LENGTH)) {
             return true;
         }
     }
@@ -31,7 +31,7 @@ bool download_exists(char *uuid) {
 
 download_handler* get_download(char *uuid) {
     for (int i = 0; i < max_idx; i++) {
-        if (!strcmp(list[i].uuid, uuid)) {
+        if (!strncmp(list[i].uuid, uuid, UUID_LENGTH)) {
             return &(list[i]);
         }
     }
@@ -40,7 +40,7 @@ download_handler* get_download(char *uuid) {
 
 void remove_download(char *uuid) {
     for (int i = 0; i < max_idx; i++) {
-        if (!strcmp(list[i].uuid, uuid)) {
+        if (!strncmp(list[i].uuid, uuid, UUID_LENGTH)) {
 
             for (int j = i; j < max_idx; j++) {
                 list[j] = list[j + 1];

@@ -67,7 +67,7 @@ int close_socket(int socket){
   return status;
 }
 
-int send_data(int socket, const char *buffer, int length, int flags) {
+int send_data(int socket, const void *buffer, int length, int flags) {
     #ifdef _WIN32
         return send(socket, buffer, length, flags);
     #else
@@ -96,7 +96,7 @@ void init_stop_handler() {
 
 void get_uuid(char* uuid) {
 #ifdef _WIN32
-    retutrn;
+    return;
 #else
     int file = open(URANDOM_PATH, O_RDONLY);
     if (file != -1) {

@@ -35,17 +35,60 @@ void init_commands() {
     command_info[3].name = COMMAND_CLOSE;
 }
 
-client_session get_command(char *buf) {
-    client_session response;
-    memset(&response, 0, sizeof(client_session));
-    response.state = INITIAL;
-    response.success = false;
+server_command get_command(char *buf, const unsigned int nread) {
+    server_command command;
+    memset(&command, 0, sizeof(server_command));
+    command.success = false;
 
-    parse_command(buf, &response);
-    return response;
+    static char short_end[64];
+    static char long_end[64];
+
+    for (int i = 0; i < COMMAND_COUNT; i++) {
+        command_holder com = command_info[i];
+
+        memset(short_end, 0, sizeof(short_end));
+        memset(long_end, 0, sizeof(long_end));
+
+        strcat(short_end, com.name);
+        strcat(long_end, com.name);
+
+        if (com.simple) {
+            strcat(short_end, COMMAND_END_1);
+            strcat(long_end, COMMAND_END_2);
+        }
+        //TODO функция побайтной передачи
+        //TODO UDP потеря пакетов
+        command.type = com.type;
+        command.simple = com.simple;
+
+        if (strstr(buf, short_end) == buf) {
+            command.success = true;
+            command.text = malloc((size_t) short_end * sizeof(char));
+            strcpy(command.text, short_end);
+            command.command_length = (size_t) (command.simple ? com.length + 1 : com.length);
+            return command;
+        } else if (strstr(buf, long_end) == buf) {
+            command.success = true;
+            command.text = malloc((size_t) long_end * sizeof(char));
+            strcpy(command.text, long_end);
+            command.command_length = (size_t) (command.simple ? com.length + 2 : com.length);
+            return command;
+        }
+    }
+
+    command.success = false;
+    if (strstr(buf, COMMAND_END_2) != NULL) {
+        command.command_length = strstr(buf, COMMAND_END_2) - buf + 2;
+    } else if (strstr(buf, COMMAND_END_1) != NULL) {
+        command.command_length = strstr(buf, COMMAND_END_1) - buf + 1;
+    } else {
+        command.command_length = nread;
+    }
+    return command;
 }
 
-bool get_long_command(char* buf, client_session *command) {
+
+bool get_long_command(char* buf, server_command *command) {
     int end_length = 2;
     char* start = strstr(buf, COMMAND_END_2);
     if (NULL == start) {
@@ -62,77 +105,42 @@ bool get_long_command(char* buf, client_session *command) {
     return false;
 }
 
-bool parse_command(char *input, client_session* command) {
-    for (int i = 0; i < COMMAND_COUNT; i++) {
-        command_holder com = command_info[i];
-
-        static char short_end[64];
-        static char long_end[64];
-        memset(short_end, 0, sizeof(short_end));
-        memset(long_end, 0, sizeof(long_end));
-
-        strcat(short_end, com.name);
-        strcat(long_end, com.name);
-
-        if (com.simple) {
-            strcat(short_end, COMMAND_END_1);
-            strcat(long_end, COMMAND_END_2);
-        }
-
-        command->type = com.type;
-        command->simple = com.simple;
-        if (strstr(input, short_end) == input) {
-            command->success = true;
-            command->text = strstr(input, short_end);
-            command->command_length = (size_t) (command->simple ? com.length + 1 : com.length);
-            return true;
-        } else if (strstr(input, long_end) == input) {
-            command->success = true;
-            command->text = strstr(input, long_end);
-            command->command_length = (size_t) (command->simple ? com.length + 2 : com.length);
-            return true;
-        }
-    }
-    return false;
-}
-
-command_response process_command(client_session command) {
+command_response process_command(const server_command *command) {
     command_response result;
     memset(&result, 0, sizeof(result));
-    result.next_state = INITIAL;
+    result.next_state = IDLE;
 
-    switch (command.type) {
+    if (!command->success) {
+        result.success = false;
+        return result;
+    }
+    result.success = true;
+
+    switch (command->type) {
         case TIME : {
-            result.type = command.type;
             get_current_time(&result);
             result.text_length = 30;
-            result.success = true;
             break;
         }
         case CLOSE : {
-            result.type = command.type;
             result.text = (char*)malloc(24 * sizeof(char));
             result.text_length = 24;
             sprintf(result.text, "Closing connection...\r\n");
-            result.success = true;
             break;
         }
         case ECHO : {
-            result.type = command.type;
-            result.text_length = (unsigned int) command.command_length;
-            result.text = (char*)malloc(command.command_length * sizeof(char));
-            strcpy(result.text, command.text);
-            free(command.text);
-            result.success = true;
+//            result.text_length = (unsigned int) command->command_length;
+//            result.text = (char*)malloc(command->command_length * sizeof(char));
+//            strcpy(result.text, command->text);
+//            free(command->text);
+            result.next_state = ECHOING;
             break;
         }
         case DOWNLOAD : {
-            result.type = command.type;
-            result.text_length = (unsigned int) command.command_length + 28;
-            result.text = (char*)malloc((command.command_length + 28) * sizeof(char));
-            sprintf(result.text, "Request to download file: %s\r\n", command.text);
+//            result.text_length = (unsigned int) command->command_length + 28;
+//            result.text = (char*)malloc((command->command_length + 28) * sizeof(char));
+//            sprintf(result.text, "Request to download file: %s\r\n", command->text);
             result.next_state = START_UPLOADING;
-            result.success = true;
             break;
         }
         default : {
@@ -143,7 +151,7 @@ command_response process_command(client_session command) {
     return result;
 }
 
-size_t find_line_ending(char *buf) {
+size_t find_line_ending(const char *buf, const size_t buf_len) {
     int ending_len = 0;
     char* start = strstr(buf, COMMAND_END_2); {
         ending_len = 2;
@@ -155,11 +163,11 @@ size_t find_line_ending(char *buf) {
     if (NULL != start) {
         return start - buf + ending_len;
     } else {
-        return 0;
+        return buf_len;
     }
 }
 
-void check_download_arguments(client_session *session) {
+void check_download_arguments(server_command *session) {
     char* uuid_start = session->text;
     if (session->type == DOWNLOAD) {
         char* delimiter = strstr(session->text, ARGS_DELIMITER);
