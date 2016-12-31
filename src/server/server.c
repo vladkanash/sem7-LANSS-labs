@@ -21,10 +21,6 @@
 int fd_hwm = 0;
 fd_set read_set, write_set;
 
-void process_echo(session_handler* session) ;
-
-void get_file_path(const session_handler *session, char *file_path);
-
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
     fd_set read_buf, write_buf;
@@ -100,7 +96,9 @@ void input_data(int fd) {
 void add_client(int fd) {
     int fd_client = accept(fd, 0, 0);
     FD_SET(fd_client, &read_set);
-    fd_client > fd_hwm && (fd_hwm = fd_client);
+    if (fd_client > fd_hwm) {
+        fd_hwm = fd_client;
+    }
 }
 
 void start_file_upload(session_handler* session) {
@@ -170,8 +168,8 @@ void parse_command_start(session_handler* session) {
     server_command* com = &(session->command);
     fd = session->fd;
 
-    recv(fd, in_buf, BUF_SIZE, MSG_PEEK);           // 0: read data from socket
-    *com = get_command(in_buf, 0);                             // 1: parse command from data
+    recv(fd, in_buf, BUF_SIZE, MSG_PEEK);                   // 0: read data from socket
+    *com = get_command(in_buf, 0);                          // 1: parse command from data
     response = process_command(com);                        // 2: process command and generate response
     session->state = response.next_state;                   // 3: update session state according to response
     send_data(fd, response.text, response.text_length, 0);  // 4: send response data back to client
@@ -190,7 +188,7 @@ void process_echo(session_handler* session) {
 
     memset(buf, 0, sizeof(buf));
 
-    recv(fd, buf, BUF_SIZE, MSG_PEEK);           // 0: read data from socket
+    recv(fd, buf, BUF_SIZE, MSG_PEEK);
     command_end = find_line_ending(buf, BUF_SIZE);
 
     recv(fd, buf, command_end, 0);
@@ -201,36 +199,10 @@ void process_echo(session_handler* session) {
     }
 }
 
-//void parse_command_end(session_handler* session) {
-//    command_response response;
-//    ssize_t nread;
-//    size_t old_size, read_size = BUF_SIZE;
-//    char* buf = (char*)malloc(sizeof(char) * read_size);
-//    int fd = session->fd;
-//    server_command* command = &(session->command);
-//
-//    do {
-//        old_size = read_size;
-//        nread = recv(fd, buf, read_size, MSG_PEEK);
-//
-//        if (get_long_command(buf, command)) {
-//            //check_download_arguments(command);
-//            response = process_command(command);
-//            recv(fd, buf, command->command_length, 0); //remove text part of long session_handler
-//            command->state = response.next_state;
-//			send_data(fd, response.text, response.text_length, 0);
-//			free(response.text);
-//        } else {
-//            read_size *= 2;
-//            buf = (char*)realloc(buf, sizeof(char) * read_size);
-//        }
-//    } while (nread == old_size);
-//    free(buf);
-//}
-
 void upload_file_part(session_handler* session) {
     download_handler* download = session->download;
-    int fd = session->fd;
+    static int fd;
+    fd = session->fd;
 
     if (NULL == download) {
         perror("ERROR: Can't find download with uuid specified.");
@@ -238,21 +210,21 @@ void upload_file_part(session_handler* session) {
         return;
     }
 
-    int file = download->file;
     off_t offset = download->offset;
     size_t remain_data = download->size - download->offset;
     size_t bytes_to_send = remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data;
 
-    ssize_t sent_bytes = sendfile(fd, file, &offset, (size_t) bytes_to_send);
+    ssize_t sent_bytes = sendfile(fd, download->file, &offset, (size_t) bytes_to_send);
 
-    fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
-            bytes_to_send, (int)offset, remain_data - sent_bytes);
+//    fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
+//            bytes_to_send, (int)offset, remain_data - sent_bytes);
 
     if (sent_bytes == remain_data) {
+        printf("Server sent %zi bytes, File successfully uploaded.", download->size);
         FD_CLR(fd, &write_set);
         session->state = IDLE;
         remove_download(session->uuid);
-        close(file);
+        close(download->file);
     } else {
         download -> offset += (size_t) sent_bytes;
         session->state = UPLOADING;
@@ -273,7 +245,7 @@ void init_client_session(int fd) {
     session_handler new_session;
     new_session.fd = fd;
     new_session.state = IDLE;
-    memcpy(new_session.uuid, "0000000000000000", UUID_LENGTH);
+    memcpy(new_session.uuid, uuid, UUID_LENGTH);
     put_session(&new_session);
 }
 

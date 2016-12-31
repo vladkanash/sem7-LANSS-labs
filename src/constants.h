@@ -4,7 +4,7 @@
 #define COMMAND_DOWNLOAD "DOWNLOAD "
 #define COMMAND_UPLOAD "UPLOAD "
 
-#define BUF_SIZE 256
+#define BUF_SIZE 2048
 #define COMMAND_MAX_LENGTH sizeof(COMMAND_DOWNLOAD)
 #define COMMAND_COUNT 4
 #define MAX_CLIENTS 256
@@ -13,7 +13,7 @@
 #define COMMAND_END_2 "\r\n"
 #define ARGS_DELIMITER " "
 
-#define CHUNK_SIZE 10
+#define CHUNK_SIZE 1024
 
 #define URANDOM_PATH "/dev/urandom"
 #define UUID_LENGTH 16
