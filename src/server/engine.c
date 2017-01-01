@@ -9,7 +9,6 @@
 #include <stdbool.h>
 
 #include "engine.h"
-#include "../constants.h"
 
 static command_holder command_info[COMMAND_COUNT];
 
@@ -18,21 +17,25 @@ void init_commands() {
     command_info[0].simple = false;
     command_info[0].length = sizeof(COMMAND_ECHO) - 1;
     command_info[0].name = COMMAND_ECHO;
+    command_info[0].next_state = ECHOING;
 
     command_info[1].type = DOWNLOAD;
     command_info[1].simple = false;
     command_info[1].length = sizeof(COMMAND_DOWNLOAD) - 1;
     command_info[1].name = COMMAND_DOWNLOAD;
+    command_info[1].next_state = START_UPLOADING;
 
     command_info[2].type = TIME;
     command_info[2].simple = true;
     command_info[2].length = sizeof(COMMAND_TIME) - 1;
     command_info[2].name = COMMAND_TIME;
+    command_info[2].next_state = IDLE;
 
     command_info[3].type = CLOSE;
     command_info[3].simple = true;
     command_info[3].length = sizeof(COMMAND_CLOSE) - 1;
     command_info[3].name = COMMAND_CLOSE;
+    command_info[3].next_state = IDLE;
 }
 
 server_command get_command(char *buf, const unsigned int nread) {
@@ -58,18 +61,18 @@ server_command get_command(char *buf, const unsigned int nread) {
         }
         //TODO функция побайтной передачи
         //TODO UDP потеря пакетов
+        memset(command.text, 0, sizeof(command.text));
         command.type = com.type;
         command.simple = com.simple;
+        command.next_state = com.next_state;
 
         if (strstr(buf, short_end) == buf) {
             command.success = true;
-            command.text = malloc((size_t) short_end * sizeof(char));
             strcpy(command.text, short_end);
             command.command_length = (size_t) (command.simple ? com.length + 1 : com.length);
             return command;
         } else if (strstr(buf, long_end) == buf) {
             command.success = true;
-            command.text = malloc((size_t) long_end * sizeof(char));
             strcpy(command.text, long_end);
             command.command_length = (size_t) (command.simple ? com.length + 2 : com.length);
             return command;
@@ -87,60 +90,30 @@ server_command get_command(char *buf, const unsigned int nread) {
     return command;
 }
 
-
-bool get_long_command(char* buf, server_command *command) {
-    int end_length = 2;
-    char* start = strstr(buf, COMMAND_END_2);
-    if (NULL == start) {
-        start = strstr(buf, COMMAND_END_1);
-        end_length = 1;
-    }
-    if (NULL != start) {
-        unsigned long size = start - buf + end_length;
-        command->command_length = size;
-        command->text = (char*)malloc(size);
-        strncpy(command->text, buf, size);
-        return true;
-    }
-    return false;
-}
-
 command_response process_command(const server_command *command) {
     command_response result;
     memset(&result, 0, sizeof(result));
-    result.next_state = IDLE;
 
     if (!command->success) {
         result.success = false;
         return result;
     }
     result.success = true;
+    memset(result.text, 0, sizeof(result.text));
 
     switch (command->type) {
         case TIME : {
             get_current_time(&result);
-            result.text_length = 30;
             break;
         }
         case CLOSE : {
-            result.text = (char*)malloc(24 * sizeof(char));
-            result.text_length = 24;
             sprintf(result.text, "Closing connection...\r\n");
             break;
         }
         case ECHO : {
-//            result.text_length = (unsigned int) command->command_length;
-//            result.text = (char*)malloc(command->command_length * sizeof(char));
-//            strcpy(result.text, command->text);
-//            free(command->text);
-            result.next_state = ECHOING;
             break;
         }
         case DOWNLOAD : {
-//            result.text_length = (unsigned int) command->command_length + 28;
-//            result.text = (char*)malloc((command->command_length + 28) * sizeof(char));
-//            sprintf(result.text, "Request to download file: %s\r\n", command->text);
-            result.next_state = START_UPLOADING;
             break;
         }
         default : {
@@ -167,27 +140,12 @@ size_t find_line_ending(const char *buf, const size_t buf_len) {
     }
 }
 
-void check_download_arguments(server_command *session) {
-    char* uuid_start = session->text;
-    if (session->type == DOWNLOAD) {
-        char* delimiter = strstr(session->text, ARGS_DELIMITER);
-        if (delimiter) {
-            uuid_start = delimiter + 1;
-            *delimiter = '\0';
-            session->command_length = delimiter - session->text;
-        }
-        strncpy(session->uuid, uuid_start, UUID_LENGTH);
-    }
-}
-
 void get_current_time(command_response* result) {
     unsigned size = 30;
     struct tm *tm;
     time_t t;
     t = time(NULL);
     tm = localtime(&t);
-    result->text = (char*)malloc(sizeof(char) * size);
     memset(result->text, 0, size);
-    strftime(result->text , size, "%Y-%m-%d %X\n", tm);
-    result->text_length = size;
+    strftime(result->text , size, "%Y-%m-%d %X", tm);
 }

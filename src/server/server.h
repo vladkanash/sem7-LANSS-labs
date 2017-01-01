@@ -11,7 +11,7 @@ void input_data(int fd);
 
 void add_client(int fd);
 
-void close_connection(int fd);
+void close_connection(session_handler* session);
 
 void parse_command_start(session_handler* session);
 

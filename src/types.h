@@ -9,25 +9,24 @@
 #include <wchar.h>
 #include "constants.h"
 
-typedef enum commands {TIME, ECHO, CLOSE, DOWNLOAD, KILL} commands;
+typedef enum command_type {TIME, ECHO, CLOSE, DOWNLOAD, KILL} command_type;
 
 typedef enum server_state {INITIAL, IDLE, START_UPLOADING, UPLOADING, ECHOING} server_state;
 
-typedef enum client_state {CLIENT_IDLE, CLIENT_START_DOWNLOADING, CLIENT_DOWNLOADING } client_state;
+typedef enum client_state {CLIENT_IDLE, CLIENT_DOWNLOADING, CLIENT_ECHOING} client_state;
 
 typedef struct server_command {
-    char* text;
-    char uuid[UUID_LENGTH + 1];
+    char text[256];
     bool simple;
     bool success;
-    commands type;
+    command_type type;
     size_t command_length;
-    server_state state;
+	server_state next_state;
 } server_command;
 
 typedef struct download_handler {
-    char uuid[UUID_LENGTH];
-    char* path;
+	char uuid[UUID_LENGTH];
+    char path[256];
     size_t offset;
     int file;
     long size;
@@ -42,21 +41,21 @@ typedef struct session_handler {
 } session_handler;
 
 typedef struct command_response {
-    char* text;
-    unsigned text_length;
+    char text[256];
     bool success;
-    server_state next_state;
 } command_response;
 
 typedef struct command_holder {
 	char* name;
 	unsigned length;
 	bool simple;
-	commands type;
+	command_type type;
+	server_state next_state;
 } command_holder;
 
 typedef struct file_info {
     char name[BUF_SIZE];
+	char comment[256];
     size_t size;
     size_t offset;
 } file_info;

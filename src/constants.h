@@ -17,3 +17,5 @@
 
 #define URANDOM_PATH "/dev/urandom"
 #define UUID_LENGTH 16
+
+#define CONN_TIMEOUT 10

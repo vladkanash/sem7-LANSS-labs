@@ -18,8 +18,8 @@
 #include "download_list.h"
 #include "session_container.h"
 
-int fd_hwm = 0;
-fd_set read_set, write_set;
+static int fd_hwm = 0;
+static fd_set read_set, write_set;
 
 void run_server(struct sockaddr_in *sap) {
     int fd_skt, fd;
@@ -103,7 +103,6 @@ void add_client(int fd) {
 
 void start_file_upload(session_handler* session) {
     struct stat file_stat;
-    static char out_buf[BUF_SIZE];
     static char file_path[BUF_SIZE];
     static char* file_name;
     static file_info info;
@@ -111,6 +110,7 @@ void start_file_upload(session_handler* session) {
 
     memset(file_path, 0, BUF_SIZE);
     memset(&info, 0, sizeof(file_info));
+    memset(&file_stat, 0, sizeof(file_stat));
 
     get_file_path(session, file_path);
 
@@ -120,17 +120,15 @@ void start_file_upload(session_handler* session) {
     int file = open(file_path, O_RDONLY);
     if (file == -1) {
         perror("Can't open file");
-        memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "Cannot find file on server: %s ", file_path);
-        write(fd, out_buf, BUF_SIZE);
+        sprintf(info.comment, "Cannot find file on server: %s ", file_path);
+        send_data(fd, &info, sizeof(file_info), NULL);
         session->state = IDLE;
         return;
     }
     if (fstat(file, &file_stat) < 0) {
         perror("fstat error");
-		memset(out_buf, 0, BUF_SIZE);
-        sprintf(out_buf, "There was an error opening file %s", file_path);
-        write(fd, out_buf, BUF_SIZE);
+        sprintf(info.comment, "There was an error opening file %s", file_path);
+        send_data(fd, &info, sizeof(file_info), NULL);
         session->state = IDLE;
         return;
     }
@@ -140,8 +138,12 @@ void start_file_upload(session_handler* session) {
 
     add_download(session->uuid, file);
     download_handler* download = get_download(session->uuid);
-    download -> size = file_stat.st_size;
+    download->size=file_stat.st_size;
+    download->offset=0;
+    download->file = file;
     session->download = download;
+
+    sprintf(info.comment, "Start downloading file: %s", file_path);
 
     send_data(fd, &info, sizeof(file_info), NULL);
     upload_file_part(session); //uploading first part of file.
@@ -149,7 +151,7 @@ void start_file_upload(session_handler* session) {
 
 void get_file_path(const session_handler *session, char *file_path) {
     int fd = session->fd;
-    recv(fd, file_path, BUF_SIZE, MSG_PEEK);
+    recv(fd, file_path, BUF_SIZE, 0);
     file_path[strlen(file_path) - 1] = '\0';
 
     if (file_path[strlen(file_path) - 1] == '\r') {
@@ -171,12 +173,12 @@ void parse_command_start(session_handler* session) {
     recv(fd, in_buf, BUF_SIZE, MSG_PEEK);                   // 0: read data from socket
     *com = get_command(in_buf, 0);                          // 1: parse command from data
     response = process_command(com);                        // 2: process command and generate response
-    session->state = response.next_state;                   // 3: update session state according to response
-    send_data(fd, response.text, response.text_length, 0);  // 4: send response data back to client
+    session->state = com->next_state;                       // 3: update session state according to response
+    send_data(fd, &response, sizeof(command_response), 0);  // 4: send response data back to client
     flush_socket(session);                                  // 5: remove processed data from socket
 
     if (com->success == true && com->type == CLOSE) {
-        close_connection(fd);
+        close_connection(session);
         return;
     }
 }
@@ -260,11 +262,14 @@ void flush_socket(session_handler* session) {
     } while (size != nread);
 }
 
-void close_connection(int fd) {
+void close_connection(session_handler* session) {
+    int fd = session->fd;
     FD_CLR(fd, &read_set);
     if (fd == fd_hwm) {
         fd_hwm--;
     }
+    
+    remove_session(session->uuid);
     close_socket(fd);
 }
 
