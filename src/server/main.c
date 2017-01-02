@@ -36,6 +36,8 @@ int main(int argc, char *argv[]){
     serv_addr.sin_port = htons((uint16_t) portno);
     printf("My process ID : %d\n", get_process_id());
     printf("Listening to port : %d\n", portno);
+    
+    signal(SIGPIPE, SIG_IGN);
 	
     run_server(&serv_addr);
 }

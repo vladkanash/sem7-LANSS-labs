@@ -16,9 +16,9 @@ static int fd_skt;
 static FILE* file;
 static client_state state = CLIENT_IDLE;
 static char uuid[UUID_LENGTH];
+static file_info download_info;
 
 int main(int argc, char** argv) {
-    file_info download_info;
     int port_number;
     char* address, ip[100];
 
@@ -40,7 +40,12 @@ int main(int argc, char** argv) {
     sa.sin_port = htons((uint16_t) port_number);
     sa.sin_addr.s_addr = inet_addr(ip);
 
-    if (!open_connection()) {
+    init_connection init;
+    memset(&init, 0, sizeof(init_connection));
+    strncpy(init.uuid, uuid, UUID_LENGTH);
+    init.downloading = false;
+
+    if (!open_connection(init)) {
         fprintf(stderr, "Can't connect to %s:%d, Exiting...", address, port_number);
         exit(1);
     }
@@ -66,14 +71,14 @@ int main(int argc, char** argv) {
     exit(EXIT_SUCCESS);
 }
 
-bool open_connection() {
+bool open_connection(init_connection init) {
     fd_skt = socket(AF_INET, SOCK_STREAM, 0);
     if (connect(fd_skt, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
         return false;
     }
 
     set_socket_timeout();
-    send_data(fd_skt, uuid, UUID_LENGTH, 0);
+    send_data(fd_skt, &init, sizeof(init_connection), 0);
     return true;
 }
 
@@ -92,7 +97,7 @@ void download_file_part(file_info* download_info) {
     size_t size = download_info->size;
 
     nread = recv(fd_skt, buf, CHUNK_SIZE, 0);
-    if (nread == -1) {
+    if (nread <= 0) {
         reopen_socket();
         return;
     } else {
@@ -116,7 +121,28 @@ void download_file_part(file_info* download_info) {
 void reopen_socket() {
     printf("Problem with connection... Cannot download file\n");
     close(fd_skt);
-    if (!open_connection()) {
+
+    char answer = 0;
+    printf("Try to restore connection? Y/N\n");
+    while (answer != 'Y' && answer != 'N') {
+        scanf("%c", &answer);
+    }
+
+    if (answer == 'N') {
+        exit(0);
+    }
+
+    init_connection init;
+    memset(&init, 0, sizeof(init_connection));
+    strncpy(init.uuid, uuid, UUID_LENGTH);
+    if (state == CLIENT_DOWNLOADING) {
+        init.downloading = true;
+        init.offset = download_info.offset;
+    } else {
+        init.downloading = false;
+    }
+
+    if (!open_connection(init)) {
         printf("Cannot open new connection. Exiting...\n");
         exit(1);
     }
@@ -192,11 +218,7 @@ bool process_user_input(file_info* download_info) {
             command_found = true;
         }
 
-        if (starts_with(input_buf, COMMAND_DOWNLOAD)) {
-            file_info info;
-        } else {
-            send_data(fd_skt, input_buf, (int) strlen(input_buf), 0); //sending input to server
-        }
+        send_data(fd_skt, input_buf, (int) strlen(input_buf), 0); //sending input to server
     }
 
     memset(&response, 0, sizeof(command_response));

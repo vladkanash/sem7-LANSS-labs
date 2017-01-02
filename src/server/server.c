@@ -210,7 +210,7 @@ void upload_file_part(session_handler* session) {
     static int fd;
     static ssize_t sent_bytes = 0;
     static size_t bytes_to_send = 0;
-    static unsigned long long remain_data = 0;
+    static long remain_data = 0;
     static off_t offset = 0;
 
     download_handler* download = session->download;
@@ -222,7 +222,7 @@ void upload_file_part(session_handler* session) {
         return;
     }
 
-    offset = (off_t) download->offset;
+    offset = download->offset;
     remain_data = download->size - download->offset;
     bytes_to_send = (ssize_t) (remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data);
     
@@ -244,20 +244,26 @@ void upload_file_part(session_handler* session) {
 }
 
 void init_client_session(int fd) {
-    static char uuid[UUID_LENGTH];
-    memset(uuid, 0, UUID_LENGTH);
-    recv(fd, uuid, UUID_LENGTH, NULL);
+    init_connection init;
+    memset(&init, 0, sizeof(init_connection));
+    recv(fd, &init, sizeof(init_connection), NULL);
 
-    session_handler* session = get_session(uuid);
+    session_handler* session = get_session(init.uuid);
     if (session != NULL) {
+        close(session->fd);
         session->fd = fd;
+
+        if (init.downloading) {
+            session->download->offset = init.offset;
+            session->state = UPLOADING;
+        }
         return;
     }
 
     session_handler new_session;
     new_session.fd = fd;
     new_session.state = IDLE;
-    memcpy(new_session.uuid, uuid, UUID_LENGTH);
+    memcpy(new_session.uuid, init.uuid, UUID_LENGTH);
     put_session(&new_session);
 }
 

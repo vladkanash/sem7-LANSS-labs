@@ -27,7 +27,7 @@ void set_socket_timeout();
 
 void process_raw_input();
 
-bool open_connection();
+bool open_connection(init_connection init);
 
 void reopen_socket();
 
