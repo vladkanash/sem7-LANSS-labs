@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <wchar.h>
+#include <sys/param.h>
 #include "constants.h"
 
 typedef enum command_type {TIME, ECHO, CLOSE, DOWNLOAD, KILL} command_type;
@@ -57,6 +58,11 @@ typedef struct file_info {
     char name[BUF_SIZE];
 	char comment[256];
     size_t size;
-	unsigned long long offset;
+	off_t offset;
 } file_info;
+
+typedef struct file_request {
+	char path[BUF_SIZE];
+	off_t offset;
+} file_request;
 #endif //LANSS_TYPES_H

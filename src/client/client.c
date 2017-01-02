@@ -5,26 +5,20 @@
 #include <netdb.h>
 #include <libgen.h>
 #include <sys/time.h>
+
 #include "client.h"
+#include "util.h"
 
-static double elapsed;
-static struct timeval t1, t2;
+static struct timeval t1;
+static struct sockaddr_in sa;
 
-void get_size_str(double elapsed, char* str);
-void print_speed_info();
-
-static fd_set set;
 static int fd_skt;
-
-static file_info download_info;
 static FILE* file;
-static size_t remaining = 0;
-
 static client_state state = CLIENT_IDLE;
 static char uuid[UUID_LENGTH];
 
 int main(int argc, char** argv) {
-    struct sockaddr_in sa;
+    file_info download_info;
     int port_number;
     char* address, ip[100];
 
@@ -40,32 +34,26 @@ int main(int argc, char** argv) {
         fprintf(stderr, "ERROR, cant read host address\n");
     }
 
+    get_uuid(uuid);
+
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t) port_number);
     sa.sin_addr.s_addr = inet_addr(ip);
-    fd_skt = socket(AF_INET, SOCK_STREAM, 0);
 
-    get_uuid(uuid);
-
-    if (connect(fd_skt, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
-       fprintf(stderr, "Can't connect to %s:%d, Exiting...", address, port_number);
-        exit(-1);
+    if (!open_connection()) {
+        fprintf(stderr, "Can't connect to %s:%d, Exiting...", address, port_number);
+        exit(1);
     }
-
-    FD_SET(fd_skt, &set);
-
-    set_socket_timeout();
-    send_data(fd_skt, uuid, UUID_LENGTH, 0);
 
     bool running = true;
     while (running) {
         switch(state) {
             case CLIENT_IDLE : {
-                running = process_user_input();
+                running = process_user_input(&download_info);
                 break;
             }
             case CLIENT_DOWNLOADING: {
-                download_file_part();
+                download_file_part(&download_info);
                 break;
             }
             case CLIENT_ECHOING: {
@@ -78,6 +66,17 @@ int main(int argc, char** argv) {
     exit(EXIT_SUCCESS);
 }
 
+bool open_connection() {
+    fd_skt = socket(AF_INET, SOCK_STREAM, 0);
+    if (connect(fd_skt, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+        return false;
+    }
+
+    set_socket_timeout();
+    send_data(fd_skt, uuid, UUID_LENGTH, 0);
+    return true;
+}
+
 void set_socket_timeout() {
     struct timeval tv;
     tv.tv_sec = CONN_TIMEOUT;
@@ -85,84 +84,100 @@ void set_socket_timeout() {
     setsockopt(fd_skt, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
 }
 
-void download_file_part() {
+void download_file_part(file_info* download_info) {
+    static int parts = 1;
     static ssize_t nread;
     static char buf[CHUNK_SIZE];
-    memset(buf, 0, CHUNK_SIZE);
+
+    size_t size = download_info->size;
 
     nread = recv(fd_skt, buf, CHUNK_SIZE, 0);
     if (nread == -1) {
-        printf("Problem with connection... Cannot download file\n");
-        state = CLIENT_IDLE;
+        reopen_socket();
+        return;
     } else {
         fwrite(buf, sizeof(char), (size_t) nread, file);
     }
 
-    remaining -= nread;
+    download_info->offset += nread;
+    off_t offset = download_info->offset;
+    if (offset > PART_SIZE * parts) {
+        parts++;
+        print_speed_info(offset, size);
+    }
 
-    if (remaining <= 0) {
-        gettimeofday(&t2, NULL);
-        elapsed = (double) (t2.tv_usec - t1.tv_usec) / 1000000 +
-                  (double) (t2.tv_sec - t1.tv_sec);
-
-        print_speed_info();
-
+    if (offset >= size) {
+        printf("Download finished!!\n");
         fclose(file);
         state = CLIENT_IDLE;
     }
 }
 
-void print_speed_info() {
-    char size_str[12];
-    memset(size_str, 0, sizeof(size_str));
-    get_size_str(download_info.size / elapsed, size_str);
-    printf("\nDownload finished. Average speed is %s \n", size_str);
+void reopen_socket() {
+    printf("Problem with connection... Cannot download file\n");
+    close(fd_skt);
+    if (!open_connection()) {
+        printf("Cannot open new connection. Exiting...\n");
+        exit(1);
+    }
+    printf("Success! Connection reopened!");
+    state = CLIENT_IDLE;
 }
 
-void get_size_str(double elapsed, char* str) {
-    if (elapsed > 1000000000) {
-        sprintf(str, "%.3f Gbps", elapsed / 1000000000);
-    } else if (elapsed > 1000000) {
-        sprintf(str, "%.3f Mbps", elapsed / 1000000);
-    } else if (elapsed > 1000) {
-        sprintf(str, "%.3f Kbps", elapsed / 1000);
-    } else sprintf(str, "%f bps", elapsed);
+void print_speed_info(off_t downloaded, size_t total) {
+    static struct timeval t2;
+    gettimeofday(&t2, NULL);
+    double elapsed = (double) (t2.tv_usec - t1.tv_usec) / 1000000 +
+              (double) (t2.tv_sec - t1.tv_sec);
+
+    char speed_str[12];
+    char finished_str[12];
+    memset(speed_str, 0, sizeof(speed_str));
+    memset(finished_str, 0, sizeof(finished_str));
+
+    get_size_str(downloaded / elapsed, speed_str);
+    get_size_str(downloaded, finished_str);
+
+    printf("%s downloaded (%.1f%%). Elapsed time is %.3f sec. Average speed is %sps \n",
+           finished_str,
+           (double) downloaded * 100 / total,
+           elapsed,
+           speed_str);
 }
 
-void init_download(char *file_path) {
+void init_download(char *file_path, file_info* download_info) {
     static ssize_t nread;
     char* file_name = basename(file_path);
     file_name[strlen(file_name) - 1] = '\0';
 
-    memset(&download_info, 0, sizeof(download_info));
+    memset(download_info, 0, sizeof(download_info));
 
-    nread = recv(fd_skt, &download_info, sizeof(file_info), 0);
+    nread = recv(fd_skt, download_info, sizeof(file_info), 0);
     if (nread != sizeof(file_info)) {
-        printf("Problem with connection... Cannot download file\n");
+        printf("Problem occurred. Cannot download file\n");
         state = CLIENT_IDLE;
     }
 
-    if (strcmp(file_name, download_info.name)) {
-        state = CLIENT_IDLE;
-        return;
-    }
-
-    if (strlen(download_info.comment) > 0) {
-        printf("%s\n", download_info.comment);
-    }
-
-    if (download_info.size == 0) {
+    if (strcmp(file_name, download_info->name)) {
         state = CLIENT_IDLE;
         return;
     }
 
-    file = fopen(download_info.name, "a");
-    remaining = download_info.size;
+    if (strlen(download_info->comment) > 0) {
+        printf("%s\n", download_info->comment);
+    }
+
+    if (download_info->size == 0) {
+        state = CLIENT_IDLE;
+        return;
+    }
+
+    file = fopen(download_info->name, "a");
     state = CLIENT_DOWNLOADING;
     gettimeofday(&t1, NULL);
 }
 
-bool process_user_input() {
+bool process_user_input(file_info* download_info) {
     static ssize_t nread;
     static char input_buf[BUF_SIZE];
     static command_response response;
@@ -177,14 +192,18 @@ bool process_user_input() {
             command_found = true;
         }
 
-        send_data(fd_skt, input_buf, (int) strlen(input_buf), 0); //sending input to server
+        if (starts_with(input_buf, COMMAND_DOWNLOAD)) {
+            file_info info;
+        } else {
+            send_data(fd_skt, input_buf, (int) strlen(input_buf), 0); //sending input to server
+        }
     }
 
     memset(&response, 0, sizeof(command_response));
     nread = recv(fd_skt, &response, sizeof(command_response), 0); //waiting for the response
     if (nread != sizeof(command_response)) {
-        fprintf(stderr, "ERROR. Problems with connection.");
-        return false;
+        reopen_socket();
+        return true;
     }
 
     if (response.success && strlen(response.text) > 0) {
@@ -195,7 +214,7 @@ bool process_user_input() {
         && response.success
         && !command_found) {
 
-        init_download(input_buf);
+        init_download(input_buf, download_info);
         return true;
     }
 
@@ -214,8 +233,7 @@ void process_raw_input() {
 
     nread = recv(fd_skt, &buf, BUF_SIZE, 0);
     if (nread == -1) {
-        printf("Problem with connection... Cannot download file\n");
-        state = CLIENT_IDLE;
+        reopen_socket();
     }
 
     printf("%s", buf);
@@ -244,10 +262,4 @@ int hostname_to_ip(char * hostname , char* ip) {
     }
 
     return -1;
-}
-
-bool starts_with(const char *str, const char *pre) {
-    size_t lenpre = strlen(pre),
-            lenstr = strlen(str);
-    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
 }

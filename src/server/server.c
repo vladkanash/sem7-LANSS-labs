@@ -17,6 +17,7 @@
 #include "engine.h"
 #include "download_list.h"
 #include "session_container.h"
+#include "util.h"
 
 static int fd_hwm = 0;
 static fd_set read_set, write_set;
@@ -143,7 +144,11 @@ void start_file_upload(session_handler* session) {
     download->file = file;
     session->download = download;
 
-    sprintf(info.comment, "Start downloading file: %s", file_path);
+    char size_str[12];
+    memset(size_str, 0, sizeof(size_str));
+    get_size_str(download->size, size_str);
+
+    sprintf(info.comment, "Start downloading file: %s, file size is %s", file_path, size_str);
 
     send_data(fd, &info, sizeof(file_info), NULL);
     upload_file_part(session); //uploading first part of file.
@@ -161,8 +166,8 @@ void get_file_path(const session_handler *session, char *file_path) {
 
 void parse_command_start(session_handler* session) {
     static char in_buf[BUF_SIZE];
-    static command_response response;
-    static int fd;
+    command_response response;
+    int fd;
 
     memset(&response, 0, sizeof(command_response));
     memset(in_buf, 0, sizeof(in_buf));
@@ -203,7 +208,6 @@ void process_echo(session_handler* session) {
 
 void upload_file_part(session_handler* session) {
     static int fd;
-    static char buf[CHUNK_SIZE];
     static ssize_t sent_bytes = 0;
     static size_t bytes_to_send = 0;
     static unsigned long long remain_data = 0;
@@ -221,10 +225,6 @@ void upload_file_part(session_handler* session) {
     offset = (off_t) download->offset;
     remain_data = download->size - download->offset;
     bytes_to_send = (ssize_t) (remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data);
-
-//    read(download->file, buf, bytes_to_send);
-//    sent_bytes = send_data(fd, buf, (int) bytes_to_send, 0);
-//    lseek(download->file, bytes_to_send, SEEK_CUR);
     
     sent_bytes = sendfile(fd, download->file, &offset, (size_t) bytes_to_send);
 

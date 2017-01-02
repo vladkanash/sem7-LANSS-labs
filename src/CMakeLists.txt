@@ -8,6 +8,7 @@ set(HEADER_FILES
         system_dependent_code.h
         constants.h
         types.h
+        util.h
         )
 
 set(SOURCE_FILES
@@ -16,6 +17,7 @@ set(SOURCE_FILES
         server/session_container.c
         server/download_list.c
         system_dependent_code.c
+        util.c
         )
 
 add_library(lanss STATIC ${SOURCE_FILES} ${HEADER_FILES})
