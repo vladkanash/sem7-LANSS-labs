@@ -246,8 +246,7 @@ int hostname_to_ip(char * hostname , char* ip) {
     return -1;
 }
 
-bool starts_with(const char *str, const char *pre)
-{
+bool starts_with(const char *str, const char *pre) {
     size_t lenpre = strlen(pre),
             lenstr = strlen(str);
     return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;

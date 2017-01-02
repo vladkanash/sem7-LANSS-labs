@@ -27,7 +27,7 @@ typedef struct server_command {
 typedef struct download_handler {
 	char uuid[UUID_LENGTH];
     char path[256];
-    size_t offset;
+    unsigned long long offset;
     int file;
     long size;
 } download_handler;
@@ -57,6 +57,6 @@ typedef struct file_info {
     char name[BUF_SIZE];
 	char comment[256];
     size_t size;
-    size_t offset;
+	unsigned long long offset;
 } file_info;
 #endif //LANSS_TYPES_H

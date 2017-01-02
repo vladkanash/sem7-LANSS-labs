@@ -202,8 +202,14 @@ void process_echo(session_handler* session) {
 }
 
 void upload_file_part(session_handler* session) {
-    download_handler* download = session->download;
     static int fd;
+    static char buf[CHUNK_SIZE];
+    static ssize_t sent_bytes = 0;
+    static size_t bytes_to_send = 0;
+    static unsigned long long remain_data = 0;
+    static off_t offset = 0;
+
+    download_handler* download = session->download;
     fd = session->fd;
 
     if (NULL == download) {
@@ -212,11 +218,15 @@ void upload_file_part(session_handler* session) {
         return;
     }
 
-    off_t offset = download->offset;
-    size_t remain_data = download->size - download->offset;
-    size_t bytes_to_send = remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data;
+    offset = (off_t) download->offset;
+    remain_data = download->size - download->offset;
+    bytes_to_send = (ssize_t) (remain_data > CHUNK_SIZE ? CHUNK_SIZE : remain_data);
 
-    ssize_t sent_bytes = sendfile(fd, download->file, &offset, (size_t) bytes_to_send);
+//    read(download->file, buf, bytes_to_send);
+//    sent_bytes = send_data(fd, buf, (int) bytes_to_send, 0);
+//    lseek(download->file, bytes_to_send, SEEK_CUR);
+    
+    sent_bytes = sendfile(fd, download->file, &offset, (size_t) bytes_to_send);
 
 //    fprintf(stdout, "Server sent %zi bytes from file's data, offset is now : %d and remaining data is  %li\n",
 //            bytes_to_send, (int)offset, remain_data - sent_bytes);
